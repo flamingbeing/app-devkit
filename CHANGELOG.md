@@ -3,6 +3,12 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.2.0
+
+- `setup-emulators` installs firebase-tools once into a cached prefix (keyed by version, OS and arch) and puts it on `PATH`,
+  and caches npx's store, so a caller's `firebase ...` and `npx firebase-tools@<same version>` no longer download it each
+  run. New output `firebase-tools-cache-hit`.
+
 ## 1.1.0
 
 - `playwright/base.mjs`: `baseConfig()` with phone (390 px) and desktop projects, one retry in CI, trace on failure.

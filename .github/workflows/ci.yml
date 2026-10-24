@@ -72,17 +72,38 @@ jobs:
         run: npx playwright test
 
   setup-emulators:
+    # run twice in one job: the second run must hit the firebase-tools cache and not download
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        run: [1, 2]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: ./setup-emulators
+        id: emu
         with:
           emulators: firestore,auth
-      - name: Java and the Firestore emulator are installed
+      - name: Second run hits the firebase-tools cache
+        if: matrix.run == 2
+        env:
+          HIT: ${{ steps.emu.outputs.firebase-tools-cache-hit }}
+        run: test "$HIT" = true
+      - name: Java, firebase and the Firestore emulator are installed
         run: |
           java -version 2>&1 | grep -q '"21'
+          firebase --version | grep -qx '13.29.1'
           ls ~/.cache/firebase/emulators/cloud-firestore-emulator-*.jar
+      - name: npx finds the same firebase-tools without downloading
+        # cold, npx installs the package (about 10 s); from its cache it answers in about 2 s
+        run: |
+          start=$(date +%s.%N)
+          npx --prefer-offline --yes firebase-tools@13.29.1 --version | grep -qx '13.29.1'
+          took=$(echo "$(date +%s.%N) - $start" | bc)
+          echo "npx took ${took}s"
+          test "$(echo "$took < 6" | bc)" = 1
 
   deploy-worker-dry-run:
     uses: ./.github/workflows/deploy-worker.yml
