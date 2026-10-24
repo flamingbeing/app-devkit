@@ -110,7 +110,7 @@ jobs:
         env:
           BETA_ENV: ${{ inputs.beta-env }}
         run: |
-          args=""
-          if [ "$BETA_ENV" = true ] && [ "$GITHUB_REF_NAME" = beta ]; then args="--env beta"; fi
-          if [ "$DRY_RUN" = true ]; then args="$args --dry-run --outdir /tmp/wrangler-out"; fi
-          npx --yes wrangler@4 deploy $args
+          args=()
+          if [ "$BETA_ENV" = true ] && [ "$GITHUB_REF_NAME" = beta ]; then args+=(--env beta); fi
+          if [ "$DRY_RUN" = true ]; then args+=(--dry-run --outdir /tmp/wrangler-out); fi
+          npx --yes wrangler@4 deploy "${args[@]}"
