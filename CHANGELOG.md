@@ -3,6 +3,14 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.4.0
+
+- Claims Worker modules: `worker/custom-token.js` (custom tokens with the claims shape, `claimsShape` check, `randomUid`)
+  and `worker/claims.js` (`/api/claims` handler, ID token verification, admin calls `setClaims`, `revoke`, Firestore
+  `getDoc`/`setDoc`/`deleteDoc`). No dependencies. Unit tests and emulator tests (claims kept across refresh, claims
+  reach the rules, revocation) in CI.
+- `setup-browser` and `setup-emulators` (with `devkit-dir`) also copy `worker/` into `.devkit/`.
+
 ## 1.3.0
 
 - Rules kit: `rules/common.rules` (claims helpers `isSignedIn`, `role`, `inGroup`, `hasRole`, `live`, `notRevoked`,

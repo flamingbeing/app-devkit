@@ -52,6 +52,7 @@ jobs:
           test -f .devkit/playwright/helpers.mjs
           test -f .devkit/rules/common.rules
           test -f .devkit/tools/build-rules.mjs
+          test -f .devkit/worker/claims.js
           node .devkit/tools/check-links.mjs .
 
   playwright-kit:
@@ -94,6 +95,20 @@ jobs:
           firebase emulators:exec --only firestore --project demo-rules-kit --config fixtures/rules/firebase.json
           "node --test rules/test/helpers.test.mjs rules/test/build.test.mjs
           rules/examples/single-group/rules.test.mjs rules/examples/multi-group/rules.test.mjs"
+
+  worker-kit:
+    # claims Worker modules: unit tests, then against the Auth and Firestore emulators (see NOTES.md)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./setup-emulators
+        with:
+          emulators: firestore,auth
+      - name: Worker modules, unit and emulator tests
+        run: >-
+          firebase emulators:exec --only auth,firestore --project demo-claims-kit --config fixtures/claims/firebase.json
+          "node --test worker/test/custom-token.test.mjs worker/test/claims.test.mjs worker/test/emulator.test.mjs"
 
   setup-emulators:
     # run twice in one job: the second run must hit the firebase-tools cache and not download
