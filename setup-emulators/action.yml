@@ -1,5 +1,5 @@
 name: Set up the Firebase emulators
-description: Java 21, firebase-tools at a pinned version, and the emulator downloads cached (and fetched up front).
+description: Java 21, firebase-tools at a pinned version (installed once, cached, on PATH), and the emulator downloads cached (and fetched up front).
 inputs:
   firebase-tools-version:
     description: Exact firebase-tools version (also the cache key).
@@ -12,6 +12,10 @@ inputs:
   java-version:
     description: Java version (temurin).
     default: '21'
+outputs:
+  firebase-tools-cache-hit:
+    description: "'true' when firebase-tools came from the cache."
+    value: ${{ steps.fbt-cache.outputs.cache-hit }}
 runs:
   using: composite
   steps:
@@ -25,6 +29,33 @@ runs:
       env:
         FB_EMULATORS: ${{ inputs.emulators }}
       run: echo "joined=$(echo "$FB_EMULATORS" | tr ',' '+' | tr -d ' ')" >> "$GITHUB_OUTPUT"
+    - name: firebase-tools location
+      id: fbt
+      shell: bash
+      run: echo "dir=$HOME/.cache/devkit/firebase-tools" >> "$GITHUB_OUTPUT"
+    - name: Cache firebase-tools
+      id: fbt-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ steps.fbt.outputs.dir }}
+          ~/.npm/_npx
+        key: firebase-tools-${{ runner.os }}-${{ runner.arch }}-${{ inputs.firebase-tools-version }}
+    - name: Install firebase-tools
+      if: steps.fbt-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        FB_VERSION: ${{ inputs.firebase-tools-version }}
+        FB_DIR: ${{ steps.fbt.outputs.dir }}
+      run: |
+        npm install --prefix "$FB_DIR" --no-audit --no-fund --loglevel=error "firebase-tools@$FB_VERSION"
+        # fill npx's own store too, so `npx firebase-tools@<same version>` in a caller does not download again
+        npx --yes "firebase-tools@$FB_VERSION" --version
+    - name: firebase on PATH
+      shell: bash
+      env:
+        FB_DIR: ${{ steps.fbt.outputs.dir }}
+      run: echo "$FB_DIR/node_modules/.bin" >> "$GITHUB_PATH"
     - uses: actions/cache@v4
       with:
         path: ~/.cache/firebase/emulators
@@ -32,12 +63,11 @@ runs:
     - name: Fetch the emulators
       shell: bash
       env:
-        FB_VERSION: ${{ inputs.firebase-tools-version }}
         FB_EMULATORS: ${{ inputs.emulators }}
       run: |
         for e in $(echo "$FB_EMULATORS" | tr ',' ' '); do
           case "$e" in
-            firestore|database|pubsub|storage|ui) npx --yes "firebase-tools@$FB_VERSION" "setup:emulators:$e" ;;
+            firestore|database|pubsub|storage|ui) firebase "setup:emulators:$e" ;;
             *) echo "no download step for '$e'; skipped" ;;
           esac
         done
