@@ -11,7 +11,7 @@ inputs:
     default: chromium
   devkit-dir:
     description: >-
-      Folder (relative to the workspace) to copy the kit's `playwright/` and `tools/` into, at the same ref the action
+      Folder (relative to the workspace) to copy the kit's `playwright/`, `rules/` and `tools/` into, at the same ref the action
       runs from, so repos with or without a package.json can import `./.devkit/playwright/base.mjs`. Empty = do not copy.
     default: .devkit
 runs:
@@ -29,11 +29,11 @@ runs:
       run: |
         if [ -n "$PW_VERSION" ]; then npx --yes "playwright@$PW_VERSION" install $PW_BROWSERS
         else npx playwright install $PW_BROWSERS; fi
-    - name: Copy the kit's Playwright files
+    - name: Copy the kit's Playwright, rules and tools files
       if: inputs.devkit-dir != ''
       shell: bash
       env:
         DEVKIT_DIR: ${{ inputs.devkit-dir }}
       run: |
         mkdir -p "$GITHUB_WORKSPACE/$DEVKIT_DIR"
-        cp -R "$GITHUB_ACTION_PATH/../playwright" "$GITHUB_ACTION_PATH/../tools" "$GITHUB_WORKSPACE/$DEVKIT_DIR/"
+        cp -R "$GITHUB_ACTION_PATH/../playwright" "$GITHUB_ACTION_PATH/../rules" "$GITHUB_ACTION_PATH/../tools" "$GITHUB_WORKSPACE/$DEVKIT_DIR/"

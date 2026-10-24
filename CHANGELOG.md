@@ -3,6 +3,14 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.3.0
+
+- Rules kit: `rules/common.rules` (claims helpers `isSignedIn`, `role`, `inGroup`, `hasRole`, `live`, `notRevoked`,
+  `can`, `roleOrDoc`, `stamped`, `stampOk`), `tools/build-rules.mjs` (pastes the helpers into an app's rules; `--check`
+  for CI) and `rules/suite.mjs` (shared emulator cases, document-lookup counts). Worked single-group and multi-group
+  examples, tested in CI.
+- `setup-browser` also copies `rules/` into `.devkit/`; `setup-emulators` gains an optional `devkit-dir` (off by default).
+
 ## 1.2.0
 
 - `setup-emulators` installs firebase-tools once into a cached prefix (keyed by version, OS and arch) and puts it on `PATH`,
