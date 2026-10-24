@@ -3,6 +3,20 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.5.0
+
+- `rules/common.rules`: `stampKept()` (`serverAt` unchanged from the stored document, for older clients' partial updates;
+  trade-off: readers that fetch only changes after a `serverAt` see that edit at their next full read), `notFuture(field)`
+  and `authorIs(field)`. Tested through probe rules in CI.
+- `rules/suite.mjs`: list-rule cases, opt-in per collection with `list: { roles, filter? }` (an unfiltered list by a
+  signed-in non-member is denied; a filter field must mirror the source of the role), `listOnly`, and a `query()` client
+  call. Existing suite configs run exactly as before. Worked example in `rules/examples/multi-group/`.
+- `deploy-rules.yml`: optional inputs `test-command`, `build-rules-check` (with `devkit-ref`, `node-version`) run before
+  the sign-in and deploy, and `dry-run` (checks only). All off by default.
+- `deploy-worker.yml`: wrangler is pinned to an exact version (new input `wrangler-version`, default `4.152.0`; it
+  floated on `wrangler@4` before); optional `smoke-url` fetched with `curl -fsS` after the deploy (off by default).
+- Removed the committed `firestore-debug.log` files; `*-debug.log` is ignored.
+
 ## 1.4.0
 
 - Claims Worker modules: `worker/custom-token.js` (custom tokens with the claims shape, `claimsShape` check, `randomUid`)

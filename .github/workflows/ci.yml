@@ -152,6 +152,16 @@ jobs:
       stamp-command: node stamp.mjs
       dry-run: true
 
+  deploy-worker-pinned-smoke:
+    # the pinned wrangler runs, then the smoke URL is fetched
+    uses: ./.github/workflows/deploy-worker.yml
+    with:
+      working-directory: fixtures/worker
+      build-command: node build.mjs
+      dry-run: true
+      wrangler-version: 4.152.0
+      smoke-url: https://example.com/
+
   deploy-worker-skips:
     uses: ./.github/workflows/deploy-worker.yml
     with:
@@ -162,3 +172,16 @@ jobs:
       contents: read
       id-token: write
     uses: ./.github/workflows/deploy-rules.yml
+
+  deploy-rules-checks:
+    # the optional pre-deploy checks run (dry run: no sign-in, no deploy)
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-rules.yml
+    with:
+      dry-run: true
+      working-directory: rules/examples/single-group
+      build-rules-check: firestore.app.rules
+      devkit-ref: ${{ github.sha }}
+      test-command: test -f firestore.rules && node --version

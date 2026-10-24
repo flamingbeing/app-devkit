@@ -5,7 +5,7 @@ rules_version = '2';
 // claim costs no doc read. Build: node tools/build-rules.mjs rules/examples/multi-group/firestore.app.rules
 service cloud.firestore {
   match /databases/{database}/documents {
-    // app-devkit rules/common.rules 1.3.0. Shared helpers, pasted in by tools/build-rules.mjs; do not edit the copy.
+    // app-devkit rules/common.rules 1.5.0. Shared helpers, pasted in by tools/build-rules.mjs; do not edit the copy.
     // Claims (a cache of the app's role docs, never the source of truth; all optional):
     //   g  { <groupId>: <role> }  the user's role per group; a single-group app uses the key '_'
     //   x  unix seconds           access ends then (absent = no end)
@@ -43,6 +43,21 @@ service cloud.firestore {
     function stamped() { return request.resource.data.get('serverAt', null) == request.time; }
     function stampOk() { return !('serverAt' in request.resource.data) || request.resource.data.serverAt == request.time; }
 
+    // Partial updates from older clients that send no serverAt: it must stay exactly what the stored document has (absent
+    // stays absent). Use instead of stampOk() on update only while such clients exist. Trade-off: the edit keeps its old
+    // serverAt, so readers that fetch only what changed after a serverAt (server mode, incremental) do not see that edit
+    // until their next full read (a weekly one, for apps that run one). Drop it once every client stamps.
+    function stampKept() { return request.resource.data.get('serverAt', null) == resource.data.get('serverAt', null); }
+
+    // The field is a timestamp that is not after the server's time (a future-dated version would sort first for good).
+    // A client clock ahead of the server is refused too; write request.time with serverTimestamp where that matters.
+    function notFuture(field) {
+      return request.resource.data.get(field, null) is timestamp && request.resource.data.get(field, null) <= request.time;
+    }
+
+    // The field holds the signed-in user's uid (an author stamp nobody can write for someone else).
+    function authorIs(field) { return isSignedIn() && request.resource.data.get(field, null) == request.auth.uid; }
+
     function memberDoc(g) { return get(/databases/$(database)/documents/groups/$(g)/members/$(request.auth.uid)); }
     // claim first, else the doc (a missing doc is an error, which denies)
     function memberRole(g) { return role(g) != '' ? role(g) : memberDoc(g).data.get('role', ''); }
@@ -54,6 +69,11 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['name', 'qty', 'serverAt'])
         && request.resource.data.name is string && request.resource.data.name.size() <= 200;
       allow delete: if allowed(g, ['owner']);
+    }
+    // The group comes from the document, so a list must filter on it: where('groupId', '==', g). A list that does not
+    // prove groupId is denied, and the filter field must be the one the role is read from (see the suite's list cases).
+    match /entries/{id} {
+      allow read: if allowed(resource.data.groupId, ['owner', 'member', 'viewer']);
     }
     // Role changes are a destructive admin write: they check the doc directly, never the (possibly stale) claim.
     match /groups/{g}/members/{uid} {

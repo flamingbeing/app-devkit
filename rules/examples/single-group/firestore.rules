@@ -4,7 +4,7 @@ rules_version = '2';
 // Build: node tools/build-rules.mjs rules/examples/single-group/firestore.app.rules
 service cloud.firestore {
   match /databases/{database}/documents {
-    // app-devkit rules/common.rules 1.3.0. Shared helpers, pasted in by tools/build-rules.mjs; do not edit the copy.
+    // app-devkit rules/common.rules 1.5.0. Shared helpers, pasted in by tools/build-rules.mjs; do not edit the copy.
     // Claims (a cache of the app's role docs, never the source of truth; all optional):
     //   g  { <groupId>: <role> }  the user's role per group; a single-group app uses the key '_'
     //   x  unix seconds           access ends then (absent = no end)
@@ -41,6 +41,21 @@ service cloud.firestore {
     // Server stamps (writes): stamped() requires serverAt == request.time; stampOk() also accepts no serverAt (old clients).
     function stamped() { return request.resource.data.get('serverAt', null) == request.time; }
     function stampOk() { return !('serverAt' in request.resource.data) || request.resource.data.serverAt == request.time; }
+
+    // Partial updates from older clients that send no serverAt: it must stay exactly what the stored document has (absent
+    // stays absent). Use instead of stampOk() on update only while such clients exist. Trade-off: the edit keeps its old
+    // serverAt, so readers that fetch only what changed after a serverAt (server mode, incremental) do not see that edit
+    // until their next full read (a weekly one, for apps that run one). Drop it once every client stamps.
+    function stampKept() { return request.resource.data.get('serverAt', null) == resource.data.get('serverAt', null); }
+
+    // The field is a timestamp that is not after the server's time (a future-dated version would sort first for good).
+    // A client clock ahead of the server is refused too; write request.time with serverTimestamp where that matters.
+    function notFuture(field) {
+      return request.resource.data.get(field, null) is timestamp && request.resource.data.get(field, null) <= request.time;
+    }
+
+    // The field holds the signed-in user's uid (an author stamp nobody can write for someone else).
+    function authorIs(field) { return isSignedIn() && request.resource.data.get(field, null) == request.auth.uid; }
 
     match /notes/{id} {
       allow read: if can('_', ['admin', 'member', 'guest']);
