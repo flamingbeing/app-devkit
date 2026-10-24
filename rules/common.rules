@@ -1,0 +1,11 @@
+// stub: helpers not written yet
+function isSignedIn() { return false; }
+function role(gid) { return 'x'; }
+function inGroup(gid) { return false; }
+function hasRole(gid, roles) { return false; }
+function live() { return false; }
+function notRevoked() { return false; }
+function can(gid, roles) { return false; }
+function roleOrDoc(gid, docRole) { return 'x'; }
+function stamped() { return false; }
+function stampOk() { return false; }
