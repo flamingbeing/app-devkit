@@ -46,6 +46,30 @@ jobs:
           playwright-version: 1.56.1
       - name: Chromium is installed
         run: ls -d ~/.cache/ms-playwright/chromium-*
+      - name: The kit's files are copied next to the app
+        run: |
+          test -f .devkit/playwright/base.mjs
+          test -f .devkit/playwright/helpers.mjs
+          node .devkit/tools/check-links.mjs .
+
+  playwright-kit:
+    # base config + emulator helpers, run through the blocks the way an app uses them
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./setup-node
+        with:
+          working-directory: fixtures/playwright
+      - uses: ./setup-browser
+        with:
+          playwright-version: 1.56.1
+      - uses: ./setup-emulators
+        with:
+          emulators: firestore,auth
+      - name: Fixture tests
+        working-directory: fixtures/playwright
+        run: npx playwright test
 
   setup-emulators:
     runs-on: ubuntu-24.04
