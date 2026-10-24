@@ -1,0 +1,37 @@
+name: Set up the Firebase emulators
+description: Java 21, firebase-tools at a pinned version, and the emulator downloads cached (and fetched up front).
+inputs:
+  firebase-tools-version:
+    description: Exact firebase-tools version (also the cache key).
+    default: '13.29.1'
+  emulators:
+    description: >-
+      Emulators whose jars to fetch up front, comma separated. Only firestore, database, pubsub, storage and ui have
+      a download; others (auth) are ignored here.
+    default: firestore
+  java-version:
+    description: Java version (temurin).
+    default: '21'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/firebase/emulators
+        key: firebase-emulators-${{ runner.os }}-${{ runner.arch }}-${{ inputs.firebase-tools-version }}-${{ inputs.emulators }}
+    - name: Fetch the emulators
+      shell: bash
+      env:
+        FB_VERSION: ${{ inputs.firebase-tools-version }}
+        FB_EMULATORS: ${{ inputs.emulators }}
+      run: |
+        for e in $(echo "$FB_EMULATORS" | tr ',' ' '); do
+          case "$e" in
+            firestore|database|pubsub|storage|ui) npx --yes "firebase-tools@$FB_VERSION" "setup:emulators:$e" ;;
+            *) echo "no download step for '$e'; skipped" ;;
+          esac
+        done

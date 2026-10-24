@@ -1,0 +1,26 @@
+name: Set up the browser
+description: Playwright Chromium only, without `--with-deps` (the apt step is the slow part), with the download cached.
+inputs:
+  playwright-version:
+    description: >-
+      Exact Playwright version (for example 1.56.1). Leave empty to use the project's own install (`npx playwright`,
+      so Node and `npm ci` must have run first); the cache is then keyed on package-lock.json.
+    default: ''
+  browsers:
+    description: Browsers to install, space separated.
+    default: chromium
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ inputs.browsers }}-${{ inputs.playwright-version || hashFiles('**/package-lock.json') }}
+    - name: Install the browser
+      shell: bash
+      env:
+        PW_VERSION: ${{ inputs.playwright-version }}
+        PW_BROWSERS: ${{ inputs.browsers }}
+      run: |
+        if [ -n "$PW_VERSION" ]; then npx --yes "playwright@$PW_VERSION" install $PW_BROWSERS
+        else npx playwright install $PW_BROWSERS; fi
