@@ -49,8 +49,9 @@ Java 21, a pinned firebase-tools, and the emulator jars cached and fetched up fr
     java-version: '21'
 ```
 
-Also copies the kit's `playwright/` and `tools/` into `.devkit/` (input `devkit-dir`, empty = skip), at the same ref
-the action runs from. Add `.devkit/` to `.gitignore`.
+`setup-browser` copies the kit's `playwright/`, `rules/` and `tools/` into `.devkit/` (input `devkit-dir`, empty =
+skip), at the same ref the action runs from; `setup-emulators` does the same when you pass `devkit-dir: .devkit` (off by
+default), for a rules-only job. Add `.devkit/` to `.gitignore`.
 
 ## Playwright base, helpers and tools
 
@@ -78,6 +79,89 @@ Tools (run with `node .devkit/tools/<name>.mjs`):
 
 - `step-timings.mjs <owner/repo> <run-id>`: job and step durations, to compare CI before and after a change.
 - `check-links.mjs [folder]`: fails on a relative link or `#anchor` in `.md`/`.html` that points nowhere.
+
+## Rules kit
+
+Shared Firestore rules helpers, a builder and an emulator test suite, for apps whose roles come from **custom claims**
+(a cache of the app's role docs, which stay the source of truth):
+
+```text
+{ g: { <groupId>: <role> },   // one role per group; a single-group app uses the key '_'
+  x: <unix seconds>,          // access ends (absent = no end)
+  v: <int>,                   // claims version, bumped when the role docs change
+  m: <string> }               // sign-in method, for the record only
+```
+
+### Helpers (`rules/common.rules`)
+
+| Helper | True when | Document lookups |
+| --- | --- | --- |
+| `isSignedIn()` | there is a token | 0 |
+| `role(gid)` | (returns) the role for `gid`, or `''` | 0 |
+| `inGroup(gid)` | any role in `gid` | 0 |
+| `hasRole(gid, roles)` | the role for `gid` is in `roles` (never `''`) | 0 |
+| `live()` | signed in and `x` is absent or later than now; a malformed `x` fails closed | 0 |
+| `notRevoked()` | signed in and there is no `revoked/{uid}` document | 1 |
+| `can(gid, roles)` | `hasRole && live && notRevoked`; the lookup runs only when the role fits | 0-1 |
+| `roleOrDoc(gid, docRole)` | (returns) the claim when present, else `docRole` | whatever `docRole` costs, always |
+| `stamped()` | the write sets `serverAt` to `request.time` | 0 |
+| `stampOk()` | `serverAt` is absent or `request.time` (while old clients write without it) | 0 |
+
+No email is used in authorisation. Keep `revoked/` closed to clients (no `match` for it): the app's server writes
+`revoked/{uid}` when a member is removed and deletes it after re-issuing claims.
+
+Rules functions take their arguments already evaluated, so a `get()` passed to `roleOrDoc` is read even when the claim
+decides. To skip that read, write the migration form inline:
+`role(g) != '' ? role(g) : get(/databases/$(database)/documents/groups/$(g)/members/$(request.auth.uid)).data.role`
+(as in `rules/examples/multi-group/`).
+
+### Building (`tools/build-rules.mjs`)
+
+Rules have no imports, so you keep your rules in `firestore.app.rules` with one line `// devkit:common` inside
+`match /databases/{database}/documents { … }`, and the builder pastes the helpers there:
+
+```bash
+node .devkit/tools/build-rules.mjs firestore.app.rules           # writes firestore.rules
+node .devkit/tools/build-rules.mjs firestore.app.rules --check   # in CI: fails if firestore.rules is stale
+```
+
+Commit the built `firestore.rules` (deploys and the emulator use exactly that). `--common <file>` points at another copy.
+
+### Test suite (`rules/suite.mjs`)
+
+No dependencies. `suite(config)` registers `node:test` cases per collection: signed out denied; each allowed role
+allowed (so the denials mean something); other roles and no role denied; a role in another group only denied
+(multi-group); `x` in the past denied and in the future allowed; a revoked uid denied; `serverAt` checks
+(`strict`/`lenient`); document lookups per read and create within budget (default 1, at most 2); `revoked/` closed;
+and, with `fallback`, a user with no claim but a role doc gets that role while a claim wins over the doc.
+
+```js
+// rules.test.mjs
+import { readFileSync } from 'node:fs';
+import { suite } from './.devkit/rules/suite.mjs';
+
+const emu = suite({
+  project: 'demo-myapp',                       // must start with demo-; one project per test file
+  rules: readFileSync('firestore.rules', 'utf8'),
+  roles: ['admin', 'member', 'guest'],
+  collections: [
+    { path: 'notes/n1', read: ['admin', 'member', 'guest'], write: ['admin', 'member'],
+      data: { text: 'hello' }, stamp: 'strict' },                 // '{g}' in the path marks a group id
+  ],
+  // fallback: { role: 'member', seed: (uid, g) => [[`groups/${g}/members/${uid}`, { role: 'member' }]] },
+});
+// your own cases beside it: emu.seed(path, data), emu.as(uid, claims).get/list/create/update/set/delete(path, …),
+// emu.anon(), emu.clear(), emu.lookups(() => oneRequest)
+```
+
+Run it inside the emulator:
+
+```bash
+firebase emulators:exec --only firestore --project demo-myapp "node --test rules.test.mjs"
+```
+
+`emu.lookups(fn)` counts the distinct documents the rules looked up while `fn` ran (from the emulator's coverage report),
+as Firestore counts them per request. Worked examples: `rules/examples/single-group/` and `rules/examples/multi-group/`.
 
 ## Reusable workflows
 

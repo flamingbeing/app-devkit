@@ -1,0 +1,64 @@
+// Built by app-devkit tools/build-rules.mjs from firestore.app.rules and rules/common.rules. Edit those, then rebuild.
+rules_version = '2';
+// Example: a multi-group app (a user may belong to several groups, one role in each). Roles: owner, member, viewer.
+// Mid-migration: users without a claim yet fall back to their members/{uid} doc, written inline so that a user with a
+// claim costs no doc read. Build: node tools/build-rules.mjs rules/examples/multi-group/firestore.app.rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // app-devkit rules/common.rules 1.3.0. Shared helpers, pasted in by tools/build-rules.mjs; do not edit the copy.
+    // Claims (a cache of the app's role docs, never the source of truth; all optional):
+    //   g  { <groupId>: <role> }  the user's role per group; a single-group app uses the key '_'
+    //   x  unix seconds           access ends then (absent = no end)
+    //   v  int                    claims version, bumped when the role docs change
+    //   m  string                 sign-in method; written for the record, never read by rules
+    // No email in authorisation. Lookups: only notRevoked() reads a document (1); the rest reads the token.
+
+    function isSignedIn() { return request.auth != null; }
+
+    // The user's role in group gid, or '' (no claim, other group, signed out).
+    function role(gid) { return isSignedIn() ? request.auth.token.get('g', {}).get(gid, '') : ''; }
+
+    function inGroup(gid) { return role(gid) != ''; }
+
+    function hasRole(gid, roles) { return inGroup(gid) && role(gid) in roles; }
+
+    // Not past the claim's access end. A malformed x fails closed.
+    function live() {
+      return isSignedIn() && (!('x' in request.auth.token) || request.time < timestamp.value(request.auth.token.x * 1000));
+    }
+
+    // One lookup: revoked/{uid} is written by the app's server when a member is removed, deleted when claims are re-issued.
+    // Keep revoked/ closed to clients (no match block for it).
+    function notRevoked() { return isSignedIn() && !exists(/databases/$(database)/documents/revoked/$(request.auth.uid)); }
+
+    // The usual gate: role in the list, access not ended, not revoked (the lookup runs only when the role fits).
+    function can(gid, roles) { return hasRole(gid, roles) && live() && notRevoked(); }
+
+    // Migration form while old clients have no claims: the claim when present, else the role from the app's own doc.
+    // Arguments are evaluated first, so a get() passed as docRole is read even when the claim decides. To skip that read,
+    // write the same form inline: role(gid) != '' ? role(gid) : get(...).data.role (see the multi-group example).
+    function roleOrDoc(gid, docRole) { return role(gid) != '' ? role(gid) : docRole; }
+
+    // Server stamps (writes): stamped() requires serverAt == request.time; stampOk() also accepts no serverAt (old clients).
+    function stamped() { return request.resource.data.get('serverAt', null) == request.time; }
+    function stampOk() { return !('serverAt' in request.resource.data) || request.resource.data.serverAt == request.time; }
+
+    function memberDoc(g) { return get(/databases/$(database)/documents/groups/$(g)/members/$(request.auth.uid)); }
+    // claim first, else the doc (a missing doc is an error, which denies)
+    function memberRole(g) { return role(g) != '' ? role(g) : memberDoc(g).data.get('role', ''); }
+    function allowed(g, roles) { return isSignedIn() && memberRole(g) in roles && live() && notRevoked(); }
+
+    match /groups/{g}/items/{id} {
+      allow read: if allowed(g, ['owner', 'member', 'viewer']);
+      allow create, update: if allowed(g, ['owner', 'member']) && stampOk()
+        && request.resource.data.keys().hasOnly(['name', 'qty', 'serverAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 200;
+      allow delete: if allowed(g, ['owner']);
+    }
+    // Role changes are a destructive admin write: they check the doc directly, never the (possibly stale) claim.
+    match /groups/{g}/members/{uid} {
+      allow read: if allowed(g, ['owner', 'member', 'viewer']);
+      allow write: if isSignedIn() && memberDoc(g).data.role == 'owner' && notRevoked();
+    }
+  }
+}

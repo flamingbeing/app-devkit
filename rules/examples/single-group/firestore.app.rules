@@ -1,0 +1,16 @@
+rules_version = '2';
+// Example: a single-group app (one shared space, so the claim key is '_'). Roles: admin, member, guest.
+// Build: node tools/build-rules.mjs rules/examples/single-group/firestore.app.rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // devkit:common
+
+    match /notes/{id} {
+      allow read: if can('_', ['admin', 'member', 'guest']);
+      allow create, update: if can('_', ['admin', 'member']) && stamped()
+        && request.resource.data.keys().hasOnly(['text', 'serverAt'])
+        && request.resource.data.text is string && request.resource.data.text.size() <= 2000;
+      allow delete: if can('_', ['admin']);
+    }
+  }
+}

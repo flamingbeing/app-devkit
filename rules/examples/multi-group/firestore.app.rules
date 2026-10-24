@@ -1,0 +1,27 @@
+rules_version = '2';
+// Example: a multi-group app (a user may belong to several groups, one role in each). Roles: owner, member, viewer.
+// Mid-migration: users without a claim yet fall back to their members/{uid} doc, written inline so that a user with a
+// claim costs no doc read. Build: node tools/build-rules.mjs rules/examples/multi-group/firestore.app.rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // devkit:common
+
+    function memberDoc(g) { return get(/databases/$(database)/documents/groups/$(g)/members/$(request.auth.uid)); }
+    // claim first, else the doc (a missing doc is an error, which denies)
+    function memberRole(g) { return role(g) != '' ? role(g) : memberDoc(g).data.get('role', ''); }
+    function allowed(g, roles) { return isSignedIn() && memberRole(g) in roles && live() && notRevoked(); }
+
+    match /groups/{g}/items/{id} {
+      allow read: if allowed(g, ['owner', 'member', 'viewer']);
+      allow create, update: if allowed(g, ['owner', 'member']) && stampOk()
+        && request.resource.data.keys().hasOnly(['name', 'qty', 'serverAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 200;
+      allow delete: if allowed(g, ['owner']);
+    }
+    // Role changes are a destructive admin write: they check the doc directly, never the (possibly stale) claim.
+    match /groups/{g}/members/{uid} {
+      allow read: if allowed(g, ['owner', 'member', 'viewer']);
+      allow write: if isSignedIn() && memberDoc(g).data.role == 'owner' && notRevoked();
+    }
+  }
+}

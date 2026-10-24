@@ -12,6 +12,11 @@ inputs:
   java-version:
     description: Java version (temurin).
     default: '21'
+  devkit-dir:
+    description: >-
+      Folder (relative to the workspace) to copy the kit's `playwright/`, `rules/` and `tools/` into, at the same ref
+      the action runs from (for a rules-only job with no browser). Empty = do not copy (default).
+    default: ''
 outputs:
   firebase-tools-cache-hit:
     description: "'true' when firebase-tools came from the cache."
@@ -71,3 +76,11 @@ runs:
             *) echo "no download step for '$e'; skipped" ;;
           esac
         done
+    - name: Copy the kit's Playwright, rules and tools files
+      if: inputs.devkit-dir != ''
+      shell: bash
+      env:
+        DEVKIT_DIR: ${{ inputs.devkit-dir }}
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/$DEVKIT_DIR"
+        cp -R "$GITHUB_ACTION_PATH/../playwright" "$GITHUB_ACTION_PATH/../rules" "$GITHUB_ACTION_PATH/../tools" "$GITHUB_WORKSPACE/$DEVKIT_DIR/"

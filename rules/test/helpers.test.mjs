@@ -23,6 +23,8 @@ service cloud.firestore {
     match /notRevoked/{id} { allow get: if notRevoked(); }
     match /can/{gid}/r/{r} { allow get: if can(gid, [r]); }
     match /roleOrDoc/{gid}/is/{want} { allow get: if roleOrDoc(gid, memberDoc()) == want; }
+    match /inline/{gid}/is/{want} { allow get: if (role(gid) != '' ? role(gid) : memberDoc()) == want; }
+    match /twoDocs/{id} { allow get: if exists(/databases/$(database)/documents/a/1) || !exists(/databases/$(database)/documents/b/2); }
     match /stamped/{id} { allow create: if stamped(); }
     match /stampOk/{id} { allow create: if stampOk(); }
   }
@@ -102,6 +104,22 @@ test('roleOrDoc(gid, docRole): the claim when present, else the doc role', async
   assert.equal(await ok(as({ g: { h1: 'guest' } }, 'u-doc'), 'roleOrDoc/h1/is/guest'), true, 'claim wins');
   assert.equal(await ok(as({ g: { h1: 'guest' } }, 'u-doc'), 'roleOrDoc/h1/is/admin'), false);
   assert.equal(await ok(as({}, 'u-none'), 'roleOrDoc/h1/is/admin'), false, 'no claim, no doc');
+  assert.equal(await emu.lookups(() => as({}, 'u-doc').get('roleOrDoc/h1/is/admin')), 1, 'no claim: one doc read');
+  // arguments are evaluated first, so the doc is read even when the claim decides
+  assert.equal(await emu.lookups(() => as({ g: { h1: 'guest' } }, 'u-doc').get('roleOrDoc/h1/is/guest')), 1);
+});
+
+test('the inline form (role(gid) != "" ? role(gid) : <doc role>) skips the doc read when a claim exists', async () => {
+  await emu.seed('members/u-doc', { role: 'admin' });
+  assert.equal(await ok(as({}, 'u-doc'), 'inline/h1/is/admin'), true);
+  assert.equal(await ok(as({ g: { h1: 'guest' } }, 'u-doc'), 'inline/h1/is/guest'), true);
+  assert.equal(await emu.lookups(() => as({ g: { h1: 'guest' } }, 'u-doc').get('inline/h1/is/guest')), 0);
+  assert.equal(await emu.lookups(() => as({}, 'u-doc').get('inline/h1/is/admin')), 1);
+});
+
+test('lookups() counts distinct documents per request', async () => {
+  assert.equal(await emu.lookups(() => as({}).get('twoDocs/a')), 2);
+  assert.equal(await emu.lookups(() => as({}).get('signedIn/a')), 0);
 });
 
 test('stamped(): serverAt must be request.time', async () => {

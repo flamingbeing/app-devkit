@@ -91,26 +91,36 @@ export function emulator({ project, host = process.env.FIRESTORE_EMULATOR_HOST |
     },
     anon: () => client(null),
     as: (uid, claims = {}) => client(token(uid, claims, project)),
-    // Document lookups (get/exists calls) the rules evaluated while fn ran. Each evaluation counts, so a repeated
-    // lookup of the same document counts twice: an upper bound on what Firestore bills and limits.
+    // Documents the rules looked up (get/exists) while fn ran: distinct paths, as Firestore counts them per request.
+    // Run one request inside fn. (Counting evaluations would not do: the emulator evaluates each lookup twice.)
     async lookups(fn) {
-      const before = await emu.lookupTotal();
+      const before = await emu.lookupPaths();
       await fn();
-      return (await emu.lookupTotal()) - before;
+      const after = await emu.lookupPaths();
+      return [...after].filter(([p, n]) => n > (before.get(p) ?? 0)).length;
     },
-    async lookupTotal() {
+    // path -> times evaluated, over every lookup in the coverage report so far
+    async lookupPaths() {
       const r = await call('GET', `${base}/emulator/v1/projects/${project}:ruleCoverage`);
-      if (r.status !== 200) return 0;
+      const seen = new Map();
+      if (r.status !== 200) return seen;
       const { rules, report = [] } = JSON.parse(r.text);
       const src = rules?.files?.[0]?.content ?? '';
-      let n = 0;
+      const text = (n) => src.slice(n.sourcePosition?.currentOffset ?? 0, n.sourcePosition?.endOffset ?? 0);
       const walk = (node) => {
-        const { currentOffset = 0, endOffset = 0 } = node.sourcePosition ?? {};
-        if (LOOKUP.test(src.slice(currentOffset, endOffset))) for (const v of node.values ?? []) n += v.count ?? 0;
+        if (LOOKUP.test(text(node))) {
+          for (const c of node.children ?? []) {
+            for (const v of c.values ?? []) {
+              if (!v.value?.pathValue) continue;
+              const key = v.value.pathValue.segments.map((s) => s.simple ?? JSON.stringify(s)).join('/');
+              seen.set(key, (seen.get(key) ?? 0) + (v.count ?? 0));
+            }
+          }
+        }
         for (const c of node.children ?? []) walk(c);
       };
       report.forEach(walk);
-      return n;
+      return seen;
     },
   };
   return emu;
@@ -125,7 +135,7 @@ export function emulator({ project, host = process.env.FIRESTORE_EMULATOR_HOST |
 //       read      roles that may read; write: roles that may create; data: a valid new document (object or fn(uid))
 //       stamp     'strict' (serverAt == request.time required), 'lenient' (optional, but if present it must be
 //                 request.time) or 'none' (default)
-//       lookups   { read: 1, write: 1 } most get/exists evaluations allowed per request (defaults shown; 2 at most)
+//       lookups   { read: 1, write: 1 } most documents the rules may look up per request (defaults; 2 at most)
 //   fallback      optional { seed(uid, gid) -> [[path, data], …], role } for the claims-or-doc migration form:
 //                 a user with no claim and that role doc must get `role`'s access.
 export function suite(config) {

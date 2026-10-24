@@ -50,6 +50,8 @@ jobs:
         run: |
           test -f .devkit/playwright/base.mjs
           test -f .devkit/playwright/helpers.mjs
+          test -f .devkit/rules/common.rules
+          test -f .devkit/tools/build-rules.mjs
           node .devkit/tools/check-links.mjs .
 
   playwright-kit:
@@ -70,6 +72,28 @@ jobs:
       - name: Fixture tests
         working-directory: fixtures/playwright
         run: npx playwright test
+
+  rules-kit:
+    # common.rules helpers, the builder and the shared suite, on the two worked examples (failing first, see NOTES.md)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./setup-emulators
+        with:
+          emulators: firestore
+          devkit-dir: .devkit
+      - name: The copy includes the rules kit
+        run: test -f .devkit/rules/suite.mjs
+      - name: Built example rules are up to date
+        run: |
+          node tools/build-rules.mjs rules/examples/single-group/firestore.app.rules --check
+          node tools/build-rules.mjs rules/examples/multi-group/firestore.app.rules --check
+      - name: Helpers, builder and examples in the emulator
+        run: >-
+          firebase emulators:exec --only firestore --project demo-rules-kit --config fixtures/rules/firebase.json
+          "node --test rules/test/helpers.test.mjs rules/test/build.test.mjs
+          rules/examples/single-group/rules.test.mjs rules/examples/multi-group/rules.test.mjs"
 
   setup-emulators:
     # run twice in one job: the second run must hit the firebase-tools cache and not download
