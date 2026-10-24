@@ -49,7 +49,7 @@ Java 21, a pinned firebase-tools, and the emulator jars cached and fetched up fr
     java-version: '21'
 ```
 
-`setup-browser` copies the kit's `playwright/`, `rules/` and `tools/` into `.devkit/` (input `devkit-dir`, empty =
+`setup-browser` copies the kit's `playwright/`, `rules/`, `tools/` and `worker/` into `.devkit/` (input `devkit-dir`, empty =
 skip), at the same ref the action runs from; `setup-emulators` does the same when you pass `devkit-dir: .devkit` (off by
 default), for a rules-only job. Add `.devkit/` to `.gitignore`.
 
@@ -162,6 +162,65 @@ firebase emulators:exec --only firestore --project demo-myapp "node --test rules
 
 `emu.lookups(fn)` counts the distinct documents the rules looked up while `fn` ran (from the emulator's coverage report),
 as Firestore counts them per request. Worked examples: `rules/examples/single-group/` and `rules/examples/multi-group/`.
+
+## Claims Worker modules
+
+Two plain ES modules for a Cloudflare Worker (Web Crypto and `fetch`, no dependencies) that set the rules kit's claims.
+Copy `worker/custom-token.js` and `worker/claims.js` into the app's Worker folder and keep their version line; to check a
+copy is unchanged in CI, `diff` it against `.devkit/worker/`.
+
+**Secrets** (Worker secrets, never in a repo): a service account's email and PEM private key, for one Firebase
+project. For custom tokens alone it needs no roles (it only signs). For `/api/claims` and `revoke` it must manage
+Firebase Auth users and write Firestore (`revoked/`, and whatever `loadClaims` reads).
+
+### Link, passcode and anonymous sign-in (`worker/custom-token.js`)
+
+The app's own route checks the link or code, then answers a custom token; the page calls `signInWithCustomToken`.
+
+```js
+import { customToken, randomUid } from './custom-token.js';
+const sa = { email: env.SA_EMAIL, key: env.SA_KEY };
+const token = await customToken(sa, randomUid('g'), { m: 'link', g: { _: 'guest' }, x: link.endsAt, v: 1 });
+```
+
+- `claimsShape(claims)` checks the shape (only `m`, `g`, `x`, `v`; at most 20 groups; group ids and roles
+  `[A-Za-z0-9_-]`; `x` in seconds; 1000 bytes at most) and throws otherwise. `customToken` calls it.
+- These claims stay on that sign-in across ID token refreshes (tested in the emulator). New claims need a new token and
+  a new sign-in, and they **win over** claims written on the account, so do not mix the two for one user.
+
+### Accounts (`worker/claims.js`)
+
+For Google, email-link and password users. The page posts its ID token, the Worker writes the claims on the account,
+and the page calls `getIdToken(true)` (at sign-in, and whenever the role doc's `v` is ahead of the token's).
+
+```js
+import { admin, handleClaims } from './claims.js';
+const adm = env.SA_KEY ? admin({ project: env.FIREBASE_PROJECT, sa: { email: env.SA_EMAIL, key: env.SA_KEY } }) : null;
+if (url.pathname === '/api/claims') return handleClaims(request, {
+  admin: adm, origin: 'https://app.example.com', limit: env.CLAIMS_LIMIT,
+  // the app's role docs are the source of truth; null = no longer a member (claims cleared)
+  loadClaims: async ({ uid, admin }) => {
+    const d = await admin.getDoc(`members/${uid}`);
+    return d ? { g: { _: d.role }, v: d.v } : null;
+  },
+});
+```
+
+- If `loadClaims` finds the role by email (old email-keyed docs), require `token.email_verified`: anyone can create a
+  password account with someone else's address.
+- `verifyIdToken(idToken, { project })`: RS256 against Google's published keys (cached by `max-age`), audience,
+  issuer, expiry. Unsigned emulator tokens only with `emulator: true` and a `demo-` project.
+- `handleClaims` answers `{ claims }`, or `{ error }` with 405, 503 (not set up), 403 (other origin), 429, 401 (no or
+  bad token), 409 (a custom-token sign-in: its claims come with the token) or 500. It deletes `revoked/{uid}` after
+  re-issuing for a member.
+- `admin(...)`: `setClaims(uid, claims)` (`{}` clears), `revoke(uid)` (writes `revoked/{uid}`, clears claims, ends
+  refresh tokens), `revokeSessions`, `markRevoked`, `clearRevoked`, `getDoc`, `setDoc`, `deleteDoc`. With
+  `emulator: { auth, firestore }` (a `demo-` project) it talks to the emulators instead and needs no service account.
+
+**Revocation:** an ID token keeps its claims for up to an hour. `revoke(uid)` makes the rules' `notRevoked()` refuse at
+once and stops the refresh tokens; the Auth emulator does not enforce the last part, so the tests prove the
+`revoked/{uid}` path. Tests: `worker/test/` (unit, and `emulator.test.mjs` with the Auth and Firestore emulators and the
+single-group example's rules).
 
 ## Reusable workflows
 
