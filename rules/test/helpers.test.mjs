@@ -27,6 +27,9 @@ service cloud.firestore {
     match /twoDocs/{id} { allow get: if exists(/databases/$(database)/documents/a/1) || !exists(/databases/$(database)/documents/b/2); }
     match /stamped/{id} { allow create: if stamped(); }
     match /stampOk/{id} { allow create: if stampOk(); }
+    match /stampKept/{id} { allow update: if stampKept(); }
+    match /notFuture/{id} { allow create: if notFuture('at'); }
+    match /authorIs/{id} { allow create: if authorIs('by'); }
   }
 }`;
 
@@ -134,4 +137,34 @@ test('stampOk(): serverAt optional, but if present it must be request.time', asy
   assert.equal((await u.create('stampOk/a', { n: 1 }, { serverAt: true })).ok, true);
   assert.equal((await u.create('stampOk/b', { n: 1 })).ok, true, 'missing is fine (old clients)');
   assert.equal((await u.create('stampOk/c', { n: 1, serverAt: new Date(Date.now() - 1000) })).ok, false);
+});
+
+test('stampKept(): serverAt stays what it was (older clients\' partial updates); a changed or added one is refused', async () => {
+  const u = as({});
+  const t = new Date('2026-01-01T00:00:00.000Z');
+  await emu.seed('stampKept/a', { n: 1, serverAt: t });
+  assert.equal((await u.update('stampKept/a', { n: 2, serverAt: t })).ok, true, 'same serverAt');
+  assert.equal((await u.update('stampKept/a', { n: 2 })).ok, false, 'dropped serverAt');
+  assert.equal((await u.update('stampKept/a', { n: 2, serverAt: new Date('2027-01-01T00:00:00.000Z') })).ok, false,
+    'changed serverAt');
+  assert.equal((await u.update('stampKept/a', { n: 2 }, { serverAt: true })).ok, false, 'new server time is not "kept"');
+  await emu.seed('stampKept/b', { n: 1 });
+  assert.equal((await u.update('stampKept/b', { n: 2 })).ok, true, 'never had one, still has none');
+  assert.equal((await u.update('stampKept/b', { n: 2, serverAt: t })).ok, false, 'cannot add one by hand');
+});
+
+test('notFuture(field): a timestamp no later than request.time; missing or other types refused', async () => {
+  const u = as({});
+  assert.equal((await u.create('notFuture/a', { at: new Date(Date.now() - 60000) })).ok, true, 'past');
+  assert.equal((await u.create('notFuture/b', { at: new Date(Date.now() + 3600000) })).ok, false, 'future');
+  assert.equal((await u.create('notFuture/c', { n: 1 })).ok, false, 'missing');
+  assert.equal((await u.create('notFuture/d', { at: 'yesterday' })).ok, false, 'not a timestamp');
+  assert.equal((await u.create('notFuture/e', { at: 0 })).ok, false, 'a number');
+});
+
+test('authorIs(field): the field is the signed-in uid; signed out and other uids refused', async () => {
+  assert.equal((await as({}, 'u1').create('authorIs/a', { by: 'u1' })).ok, true);
+  assert.equal((await as({}, 'u1').create('authorIs/b', { by: 'u2' })).ok, false, "someone else's uid");
+  assert.equal((await as({}, 'u1').create('authorIs/c', { n: 1 })).ok, false, 'missing');
+  assert.equal((await anon().create('authorIs/d', { by: 'u1' })).ok, false, 'signed out');
 });

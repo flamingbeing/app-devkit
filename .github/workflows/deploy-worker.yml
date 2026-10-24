@@ -37,6 +37,14 @@ on:
         description: Build and run `wrangler deploy --dry-run` (no secrets needed). Used by this repo's own checks.
         type: boolean
         default: false
+      wrangler-version:
+        description: Exact wrangler version (4.x), so a new wrangler release cannot break a deploy.
+        type: string
+        default: '4.152.0'
+      smoke-url:
+        description: URL fetched with `curl -fsS` after the deploy; a failure fails the run (also after a dry run). Empty = none.
+        type: string
+        default: ''
     secrets:
       CLOUDFLARE_API_TOKEN:
         required: false
@@ -109,8 +117,14 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           BETA_ENV: ${{ inputs.beta-env }}
+          WRANGLER: ${{ inputs.wrangler-version }}
         run: |
           args=()
           if [ "$BETA_ENV" = true ] && [ "$GITHUB_REF_NAME" = beta ]; then args+=(--env beta); fi
           if [ "$DRY_RUN" = true ]; then args+=(--dry-run --outdir /tmp/wrangler-out); fi
-          npx --yes wrangler@4 deploy "${args[@]}"
+          npx --yes "wrangler@$WRANGLER" deploy "${args[@]}"
+      - name: Smoke test
+        if: steps.gate.outputs.go == 'true' && inputs.smoke-url != ''
+        env:
+          URL: ${{ inputs.smoke-url }}
+        run: curl -fsS --retry 3 --retry-delay 5 --retry-all-errors --max-time 30 -o /dev/null "$URL"

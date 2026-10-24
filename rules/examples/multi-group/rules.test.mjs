@@ -10,7 +10,9 @@ const emu = suite({
   roles: ['owner', 'member', 'viewer'],
   collections: [
     { path: 'groups/{g}/items/i1', read: ['owner', 'member', 'viewer'], write: ['owner', 'member'],
-      data: { name: 'milk', qty: 2 }, stamp: 'lenient' },
+      data: { name: 'milk', qty: 2 }, stamp: 'lenient', list: { roles: ['owner', 'member', 'viewer'] } },
+    // a top-level collection whose rule reads the group from the document: lists must filter on it
+    { path: 'entries/e1', listOnly: true, list: { roles: ['owner', 'member', 'viewer'], filter: { field: 'groupId' } } },
   ],
   fallback: { role: 'viewer', seed: (uid, g) => [[`groups/${g}/members/${uid}`, { role: 'viewer' }]] },
 });

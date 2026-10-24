@@ -18,6 +18,11 @@ service cloud.firestore {
         && request.resource.data.name is string && request.resource.data.name.size() <= 200;
       allow delete: if allowed(g, ['owner']);
     }
+    // The group comes from the document, so a list must filter on it: where('groupId', '==', g). A list that does not
+    // prove groupId is denied, and the filter field must be the one the role is read from (see the suite's list cases).
+    match /entries/{id} {
+      allow read: if allowed(resource.data.groupId, ['owner', 'member', 'viewer']);
+    }
     // Role changes are a destructive admin write: they check the doc directly, never the (possibly stale) claim.
     match /groups/{g}/members/{uid} {
       allow read: if allowed(g, ['owner', 'member', 'viewer']);

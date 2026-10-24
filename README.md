@@ -106,6 +106,14 @@ Shared Firestore rules helpers, a builder and an emulator test suite, for apps w
 | `roleOrDoc(gid, docRole)` | (returns) the claim when present, else `docRole` | whatever `docRole` costs, always |
 | `stamped()` | the write sets `serverAt` to `request.time` | 0 |
 | `stampOk()` | `serverAt` is absent or `request.time` (while old clients write without it) | 0 |
+| `stampKept()` | on update, `serverAt` is exactly what the stored document has (older clients' partial updates) | 0 |
+| `notFuture(field)` | `field` is a timestamp not after `request.time` | 0 |
+| `authorIs(field)` | signed in and `field` is the caller's uid | 0 |
+
+`stampKept()` is a migration aid: an older client that sends no `serverAt` keeps the old one, so readers that fetch only
+documents changed after a `serverAt` (server mode) see that edit at their next full read (weekly, for apps that run
+one). Drop it once every client stamps. `notFuture` also refuses a client clock ahead of the server; write
+`request.time` (server timestamp) where that matters.
 
 No email is used in authorisation. Keep `revoked/` closed to clients (no `match` for it): the app's server writes
 `revoked/{uid}` when a member is removed and deletes it after re-issuing claims.
@@ -134,6 +142,12 @@ allowed (so the denials mean something); other roles and no role denied; a role 
 (multi-group); `x` in the past denied and in the future allowed; a revoked uid denied; `serverAt` checks
 (`strict`/`lenient`); document lookups per read and create within budget (default 1, at most 2); `revoked/` closed;
 and, with `fallback`, a user with no claim but a role doc gets that role while a claim wins over the doc.
+
+List rules are tested when a collection has `list: { roles, filter? }`: a signed-out user, a signed-in user with no
+role and every role outside `roles` is denied an unfiltered list; `roles` may list. With `filter: { field }` (rules that
+read `resource.data.<field>`) the listing roles must filter on their own group's value, and an unfiltered query, another
+group's value, or a role in another group only is denied, so the filter field mirrors the source of the role.
+`listOnly: true` runs just these cases (see `entries/e1` in `rules/examples/multi-group/rules.test.mjs`).
 
 ```js
 // rules.test.mjs
@@ -226,7 +240,7 @@ single-group example's rules).
 
 ### `deploy-worker.yml`
 
-Deploys a Cloudflare Worker with `wrangler@4`. Without the two Cloudflare secrets the run says so and **skips**. A
+Deploys a Cloudflare Worker with an exact wrangler version (input `wrangler-version`, default `4.152.0`). Without the two Cloudflare secrets the run says so and **skips**. A
 byte-order mark or trailing CR/LF on either secret is stripped first (it otherwise makes wrangler fail).
 
 ```yaml
@@ -247,7 +261,8 @@ jobs:
 ```
 
 Other inputs: `node-version` (22), `working-directory` (`.`), `dry-run` (build and `wrangler deploy --dry-run`, no
-secrets needed).
+secrets needed), `wrangler-version` (exact, default `4.152.0`), `smoke-url` (fetched with `curl -fsS` after the deploy;
+empty = none).
 
 ### `deploy-rules.yml`
 
@@ -273,7 +288,11 @@ jobs:
       rules-deployer: ${{ vars.RULES_DEPLOYER }}
 ```
 
-Other inputs: `only` (`firestore:rules`), `firebase-tools-version` (`13`).
+Other inputs: `only` (`firestore:rules`), `firebase-tools-version` (`13`). Optional checks, all off by default, run
+before the sign-in (a failure stops the run): `test-command` (in `working-directory`, e.g. the rules tests through
+`firebase emulators:exec`), `build-rules-check` (path of the app rules source; fails if the built `firestore.rules` is
+stale; it fetches the builder at `devkit-ref`, default `v1`, so set it to your pin), `node-version` (22) and `dry-run`
+(checks only, no deploy).
 
 ## Speed recipe the blocks follow
 

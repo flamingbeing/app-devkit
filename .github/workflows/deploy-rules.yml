@@ -11,6 +11,9 @@
 #         rules-deployer: ${{ vars.RULES_DEPLOYER }}
 # Until all three values are set the run skips cleanly. The rules are compiled by the deploy, so a syntax error fails
 # the run and leaves the live rules as they were.
+# Optional checks before the deploy (off by default; a failure stops the run before it signs in):
+#   build-rules-check: firestore.app.rules   # fails if the built firestore.rules is stale (tools/build-rules.mjs --check)
+#   test-command: npx --yes firebase-tools@13 emulators:exec --only firestore "node --test rules.test.mjs"
 name: Deploy rules
 
 on:
@@ -39,6 +42,28 @@ on:
         description: Service account email that may deploy the rules.
         type: string
         default: ''
+      test-command:
+        description: Run before the deploy, in working-directory (for example the rules tests). Empty = none.
+        type: string
+        default: ''
+      build-rules-check:
+        description: >-
+          Path (from working-directory) of the app rules source, for `build-rules.mjs --check` before the deploy
+          (the built rules must be current). Empty = no check.
+        type: string
+        default: ''
+      devkit-ref:
+        description: Kit ref whose tools/build-rules.mjs and rules/common.rules the check uses (match your pin).
+        type: string
+        default: 'v1'
+      node-version:
+        description: Node version for the checks (used only when one is set).
+        type: string
+        default: '22'
+      dry-run:
+        description: Run the checks only; skip the sign-in and the deploy. Used by this repo's own checks.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -55,8 +80,11 @@ jobs:
           PROJECT: ${{ inputs.firebase-project }}
           PROVIDER: ${{ inputs.wif-provider }}
           ACCOUNT: ${{ inputs.rules-deployer }}
+          DRY_RUN: ${{ inputs.dry-run }}
         run: |
-          if [ -z "$PROJECT" ] || [ -z "$PROVIDER" ] || [ -z "$ACCOUNT" ]; then
+          if [ "$DRY_RUN" = true ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "$PROJECT" ] || [ -z "$PROVIDER" ] || [ -z "$ACCOUNT" ]; then
             echo "go=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Skipped. Pass firebase-project, wif-provider and rules-deployer first."
           else
@@ -64,13 +92,36 @@ jobs:
           fi
       - uses: actions/checkout@v4
         if: steps.ready.outputs.go == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.ready.outputs.go == 'true' && (inputs.test-command != '' || inputs.build-rules-check != '')
+        with:
+          node-version: ${{ inputs.node-version }}
+      - uses: actions/checkout@v4
+        if: steps.ready.outputs.go == 'true' && inputs.build-rules-check != ''
+        with:
+          repository: flamingbeing/app-devkit
+          ref: ${{ inputs.devkit-ref }}
+          path: .devkit-src
+      - name: Built rules are current
+        if: steps.ready.outputs.go == 'true' && inputs.build-rules-check != ''
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          SRC: ${{ inputs.build-rules-check }}
+          TOOL: ${{ github.workspace }}/.devkit-src/tools/build-rules.mjs
+        run: node "$TOOL" "$SRC" --check
+      - name: Tests
+        if: steps.ready.outputs.go == 'true' && inputs.test-command != ''
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          CMD: ${{ inputs.test-command }}
+        run: bash -c "$CMD"
       - uses: google-github-actions/auth@v2
-        if: steps.ready.outputs.go == 'true'
+        if: steps.ready.outputs.go == 'true' && !inputs.dry-run
         with:
           workload_identity_provider: ${{ inputs.wif-provider }}
           service_account: ${{ inputs.rules-deployer }}
       - name: Deploy
-        if: steps.ready.outputs.go == 'true'
+        if: steps.ready.outputs.go == 'true' && !inputs.dry-run
         working-directory: ${{ inputs.working-directory }}
         env:
           PROJECT: ${{ inputs.firebase-project }}

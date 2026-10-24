@@ -66,6 +66,17 @@ export function emulator({ project, host = process.env.FIRESTORE_EMULATOR_HOST |
     return {
       get: async (path) => verdict(await call('GET', url(path), auth)),
       list: async (path) => verdict(await call('GET', url(path), auth)),
+      // a structured query on a collection, optionally filtered { field, value } (field == value)
+      query: async (path, where) => {
+        const parts = path.split('/');
+        const id = parts.pop();
+        const parent = parts.length ? `${root}/${parts.join('/')}` : root;
+        const structuredQuery = { from: [{ collectionId: id }] };
+        if (where) {
+          structuredQuery.where = { fieldFilter: { field: { fieldPath: where.field }, op: 'EQUAL', value: toValue(where.value) } };
+        }
+        return verdict(await call('POST', `${base}/v1/${parent}:runQuery`, auth, { structuredQuery }));
+      },
       create: (path, data, opts) => commit('create', path, data, opts),
       update: (path, data, opts) => commit('update', path, data, opts),
       set: (path, data, opts) => commit('set', path, data, opts),
@@ -132,10 +143,16 @@ export function emulator({ project, host = process.env.FIRESTORE_EMULATOR_HOST |
 //   collections   [{ path, read, write, data, stamp, lookups }]
 //       path      a document path; '{g}' marks the group id (multi-group). Without it the app is single-group and
 //                 the claim key is '_'.
-//       read      roles that may read; write: roles that may create; data: a valid new document (object or fn(uid))
+//       read      roles that may read (not needed with listOnly); write: roles that may create; data: a valid new document (object or fn(uid))
 //       stamp     'strict' (serverAt == request.time required), 'lenient' (optional, but if present it must be
 //                 request.time) or 'none' (default)
 //       lookups   { read: 1, write: 1 } most documents the rules may look up per request (defaults; 2 at most)
+//       list      optional { roles, filter?, } list-rule cases (off unless given). roles: who may list (others,
+//                 incl. a signed-in user with no role, must be denied an unfiltered list). filter: { field }, for a
+//                 rule that proves access from a query filter (`resource.data.<field>`): a listing role must filter
+//                 on its own group's value (the group id '{g}' stands for) and is denied an unfiltered query or
+//                 another group's value, so the filter field mirrors the source of the role.
+//       listOnly  true = run only the list cases for this collection (path is any document path in it)
 //   fallback      optional { seed(uid, gid) -> [[path, data], …], role } for the claims-or-doc migration form:
 //                 a user with no claim and that role doc must get `role`'s access.
 export function suite(config) {
@@ -157,11 +174,52 @@ export function suite(config) {
     const stamp = c.stamp ?? 'none';
     const opts = stamp === 'none' ? {} : { serverAt: true };
     const max = { read: 1, write: 1, ...c.lookups };
-    const reader = c.read[0];
-    const writer = c.write[0];
+    const reader = c.read?.[0];
+    const writer = c.write?.[0];
     const claims = (role, extra = {}) => ({ g: { [key]: role }, v: 1, ...extra });
     const name = (s) => `${c.path}: ${s}`;
-    const reset = async () => { await emu.clear(); await emu.seed(path, data('seed')); };
+    const reset = async () => { await emu.clear(); if (c.data) await emu.seed(path, data('seed')); };
+
+    if (c.list) {
+      const lister = c.list.roles ?? [];
+      const filter = c.list.filter;
+      const lkey = multi || filter ? G : '_';
+      const lclaims = (role) => ({ g: { [lkey]: role }, v: 1 });
+      const own = filter ? { field: filter.field, value: G } : undefined;
+      const other = filter ? { field: filter.field, value: OTHER } : undefined;
+      const q = (u, where) => (where ? u.query(collection, where) : u.list(collection));
+
+      test(name('list: signed out, no role and non-listing roles are denied an unfiltered list'), async () => {
+        await reset();
+        assert.equal((await emu.anon().list(collection)).ok, false, 'signed out');
+        assert.equal((await emu.as('u-none', { v: 1 }).list(collection)).ok, false, 'signed in, no role');
+        for (const r of roles.filter((x) => !lister.includes(x))) {
+          assert.equal((await emu.as(`u-${r}`, lclaims(r)).list(collection)).ok, false, `${r} list`);
+        }
+      });
+
+      if (lister.length) {
+        test(name(`list: ${lister.join('/')} may list${filter ? ` with ${filter.field} = their group` : ''}`), async () => {
+          await reset();
+          for (const r of lister) assert.equal((await q(emu.as(`u-${r}`, lclaims(r)), own)).ok, true, `${r} list`);
+        });
+      }
+
+      if (filter) {
+        test(name(`list: ${filter.field} must mirror the role's group (no filter, other group, no role: denied)`), async () => {
+          await reset();
+          for (const r of lister) {
+            const u = emu.as(`u-${r}`, lclaims(r));
+            assert.equal((await u.list(collection)).ok, false, `${r} unfiltered`);
+            assert.equal((await q(u, other)).ok, false, `${r} filtered on another group`);
+          }
+          assert.equal((await q(emu.as('u-none', { v: 1 }), own)).ok, false, 'no role, filtered');
+          assert.equal((await q(emu.as('u-else', { g: { [OTHER]: lister[0] ?? roles[0] }, v: 1 }), own)).ok, false,
+            'a role in another group only, filtered on this one');
+        });
+      }
+    }
+    if (c.listOnly) continue;
 
     test(name('signed out: read and create denied'), async () => {
       await reset();

@@ -10,7 +10,7 @@ const emu = suite({
   roles: ['admin', 'member', 'guest'],
   collections: [
     { path: 'notes/n1', read: ['admin', 'member', 'guest'], write: ['admin', 'member'], data: { text: 'hello' },
-      stamp: 'strict' },
+      stamp: 'strict', list: { roles: ['admin', 'member', 'guest'] } },
   ],
 });
 
