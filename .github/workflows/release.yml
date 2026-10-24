@@ -1,0 +1,55 @@
+# Tags each new version once CI has passed on main: if package.json's version has no tag yet, tag that commit vX.Y.Z
+# (an existing exact tag is never moved), then point the major tag (v1) at the newest vX.* release.
+# Sessions cannot push tags, so this workflow does. Also runs by hand (on the branch you pick: use main).
+name: Release tag
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+      - name: Tag the version and move the major tag
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          case "$version" in [0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::package.json version '$version' is not X.Y.Z"; exit 1;; esac
+          v="v$version"
+          major="v${version%%.*}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --tags --force --quiet
+          if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then
+            echo "$v exists; not moved"
+          else
+            git tag -a "$v" -m "app-devkit $version" "$SHA"
+            git push origin "refs/tags/$v"
+            echo "tagged $v at $SHA"
+          fi
+          # the major tag follows the highest release of that major, never backwards
+          newest="$(git tag --list "$major.*" | sort -V | tail -n1)"
+          target="$(git rev-list -n1 "$newest")"
+          current="$(git rev-parse -q --verify "refs/tags/$major^{commit}" || true)"
+          if [ "$current" = "$target" ]; then echo "$major already at $newest"; exit 0; fi
+          git tag -fa "$major" -m "app-devkit $major (now $newest)" "$target"
+          git push --force origin "refs/tags/$major"
+          echo "$major now points at $newest ($target)"

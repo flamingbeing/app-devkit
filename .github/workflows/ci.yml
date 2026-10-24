@@ -1,0 +1,80 @@
+# Runs every block of this kit on a tiny fixture, so a broken block fails here before an app calls it.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+      - name: Secret-cleaning function
+        run: bash scripts/test-clean.sh
+
+  setup-node:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./setup-node
+        with:
+          working-directory: fixtures/node
+      - run: node --version | grep -q '^v22\.'
+
+  setup-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./setup-browser
+        with:
+          playwright-version: 1.56.1
+      - name: Chromium is installed
+        run: ls -d ~/.cache/ms-playwright/chromium-*
+
+  setup-emulators:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./setup-emulators
+        with:
+          emulators: firestore,auth
+      - name: Java and the Firestore emulator are installed
+        run: |
+          java -version 2>&1 | grep -q '"21'
+          ls ~/.cache/firebase/emulators/cloud-firestore-emulator-*.jar
+
+  deploy-worker-dry-run:
+    uses: ./.github/workflows/deploy-worker.yml
+    with:
+      working-directory: fixtures/worker
+      build-command: node build.mjs
+      stamp-command: node stamp.mjs
+      dry-run: true
+
+  deploy-worker-skips:
+    uses: ./.github/workflows/deploy-worker.yml
+    with:
+      working-directory: fixtures/worker
+
+  deploy-rules-skips:
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-rules.yml

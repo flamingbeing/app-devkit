@@ -1,0 +1,31 @@
+name: Set up Node
+description: Node (default 22) with the npm cache, and `npm ci` when the project has a lockfile.
+inputs:
+  node-version:
+    description: Node version.
+    default: '22'
+  working-directory:
+    description: Folder with package.json and package-lock.json.
+    default: '.'
+  install:
+    description: Run `npm ci` after setup ("true" or "false"). Skipped when there is no package-lock.json.
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Lockfile?
+      id: lock
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ -f package-lock.json ]; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: ${{ steps.lock.outputs.found == 'true' && 'npm' || '' }}
+        cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+    - name: npm ci
+      if: inputs.install == 'true' && steps.lock.outputs.found == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm ci

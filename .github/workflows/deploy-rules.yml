@@ -1,0 +1,79 @@
+# Reusable: deploy Firestore rules (or another `firebase deploy --only` target) on merge. Call it from a workflow that
+# runs on push to main with `paths:` on the rules file. The caller must grant `id-token: write` (keyless sign-in):
+#   permissions: { contents: read, id-token: write }
+#   jobs:
+#     deploy:
+#       uses: flamingbeing/app-devkit/.github/workflows/deploy-rules.yml@v1
+#       with:
+#         working-directory: myapp          # its firebase.json names firestore.rules
+#         firebase-project: ${{ vars.FIREBASE_PROJECT }}
+#         wif-provider: ${{ vars.WIF_PROVIDER }}
+#         rules-deployer: ${{ vars.RULES_DEPLOYER }}
+# Until all three values are set the run skips cleanly. The rules are compiled by the deploy, so a syntax error fails
+# the run and leaves the live rules as they were.
+name: Deploy rules
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Folder whose firebase.json names the rules.
+        type: string
+        default: '.'
+      only:
+        description: Passed to `firebase deploy --only`.
+        type: string
+        default: 'firestore:rules'
+      firebase-tools-version:
+        type: string
+        default: '13'
+      firebase-project:
+        description: Firebase project id (pass the caller's variable).
+        type: string
+        default: ''
+      wif-provider:
+        description: Workload Identity Federation provider resource name.
+        type: string
+        default: ''
+      rules-deployer:
+        description: Service account email that may deploy the rules.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Ready to deploy?
+        id: ready
+        env:
+          PROJECT: ${{ inputs.firebase-project }}
+          PROVIDER: ${{ inputs.wif-provider }}
+          ACCOUNT: ${{ inputs.rules-deployer }}
+        run: |
+          if [ -z "$PROJECT" ] || [ -z "$PROVIDER" ] || [ -z "$ACCOUNT" ]; then
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipped. Pass firebase-project, wif-provider and rules-deployer first."
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.ready.outputs.go == 'true'
+      - uses: google-github-actions/auth@v2
+        if: steps.ready.outputs.go == 'true'
+        with:
+          workload_identity_provider: ${{ inputs.wif-provider }}
+          service_account: ${{ inputs.rules-deployer }}
+      - name: Deploy
+        if: steps.ready.outputs.go == 'true'
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          PROJECT: ${{ inputs.firebase-project }}
+          ONLY: ${{ inputs.only }}
+          FB: ${{ inputs.firebase-tools-version }}
+        run: npx --yes "firebase-tools@$FB" deploy --only "$ONLY" --project "$PROJECT" --non-interactive
