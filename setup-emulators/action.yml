@@ -19,10 +19,16 @@ runs:
       with:
         distribution: temurin
         java-version: ${{ inputs.java-version }}
+    - name: Cache key part
+      id: names
+      shell: bash
+      env:
+        FB_EMULATORS: ${{ inputs.emulators }}
+      run: echo "joined=$(echo "$FB_EMULATORS" | tr ',' '+' | tr -d ' ')" >> "$GITHUB_OUTPUT"
     - uses: actions/cache@v4
       with:
         path: ~/.cache/firebase/emulators
-        key: firebase-emulators-${{ runner.os }}-${{ runner.arch }}-${{ inputs.firebase-tools-version }}-${{ replace(inputs.emulators, ',', '+') }}
+        key: firebase-emulators-${{ runner.os }}-${{ runner.arch }}-${{ inputs.firebase-tools-version }}-${{ steps.names.outputs.joined }}
     - name: Fetch the emulators
       shell: bash
       env:
