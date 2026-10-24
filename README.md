@@ -49,6 +49,36 @@ Java 21, a pinned firebase-tools, and the emulator jars cached and fetched up fr
     java-version: '21'
 ```
 
+Also copies the kit's `playwright/` and `tools/` into `.devkit/` (input `devkit-dir`, empty = skip), at the same ref
+the action runs from. Add `.devkit/` to `.gitignore`.
+
+## Playwright base, helpers and tools
+
+Plain ES modules with no dependencies, imported from `.devkit/` after `setup-browser` (so a repo with no `package.json`
+works too). Locally, copy the folders once or point the import at a checkout of this repo.
+
+```js
+// playwright.config.mjs
+import { baseConfig } from './.devkit/playwright/base.mjs';
+import { emulatorServer } from './.devkit/playwright/helpers.mjs';
+export default baseConfig({
+  testDir: 'e2e',
+  projects: ['phone'],                          // phone (390 x 844, touch), desktop (1280 x 800); default both
+  webServer: emulatorServer({ project: 'demo-myapp', only: 'firestore,auth', cwd: 'app' }),
+  globalSetup: './global-setup.mjs',            // export default () => waitForEmulators()
+});
+```
+
+`baseConfig` sets parallel tests, 1 retry in CI (0 locally; override with `retries`), trace and screenshot on failure,
+and lets anything you pass win. Helpers: `waitFor(fn)` and `waitForState(page, fn)` wait for a state instead of a sleep;
+`fsAdmin(project)` seeds, reads and clears Firestore emulator documents (skips the rules); `createTestUser(project,
+email)` makes or signs in an Auth emulator account; `emulatorServer` refuses a project that is not `demo-`.
+
+Tools (run with `node .devkit/tools/<name>.mjs`):
+
+- `step-timings.mjs <owner/repo> <run-id>`: job and step durations, to compare CI before and after a change.
+- `check-links.mjs [folder]`: fails on a relative link or `#anchor` in `.md`/`.html` that points nowhere.
+
 ## Reusable workflows
 
 ### `deploy-worker.yml`
