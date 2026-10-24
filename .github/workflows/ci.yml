@@ -151,14 +151,6 @@ jobs:
       build-command: node build.mjs
       stamp-command: node stamp.mjs
       dry-run: true
-
-  deploy-worker-pinned-smoke:
-    # the pinned wrangler runs, then the smoke URL is fetched
-    uses: ./.github/workflows/deploy-worker.yml
-    with:
-      working-directory: fixtures/worker
-      build-command: node build.mjs
-      dry-run: true
       wrangler-version: 4.152.0
       smoke-url: https://example.com/
 
