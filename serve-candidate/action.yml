@@ -1,0 +1,48 @@
+name: Serve a candidate engine
+description: >-
+  Every Playwright browser context in later steps serves core.anawj.com/sync/<any>/ and /update/<any>/ from local
+  folders (an app-sync candidate), and logs the engine VERSION each page really ran, for report.mjs.
+inputs:
+  sync-dir:
+    description: Folder with the candidate's index.js and src/ (an app-sync checkout), relative to the workspace.
+    required: true
+  update-dir:
+    description: Folder served for core.anawj.com/update/<any>/ (app-sync's update/). Empty = the live update module.
+    default: ''
+  log:
+    description: Where the preload writes one JSON line per browser context. Empty = $RUNNER_TEMP/serve-candidate.jsonl.
+    default: ''
+outputs:
+  version:
+    description: The candidate's VERSION (from its index.js), for report.mjs --expect.
+    value: ${{ steps.env.outputs.version }}
+  log:
+    description: The log path.
+    value: ${{ steps.env.outputs.log }}
+  kit:
+    description: This block's folder (report.mjs and shell.mjs are there).
+    value: ${{ steps.env.outputs.kit }}
+runs:
+  using: composite
+  steps:
+    - id: env
+      shell: bash
+      env:
+        SYNC: ${{ inputs.sync-dir }}
+        UPDATE: ${{ inputs.update-dir }}
+        LOG: ${{ inputs.log }}
+      run: |
+        sync="$(cd "$GITHUB_WORKSPACE" && realpath "$SYNC")"
+        test -f "$sync/index.js" || { echo "::error::no index.js in $SYNC"; exit 1; }
+        version="$(sed -n "s/^export const VERSION = '\([^']*\)'.*/\1/p" "$sync/index.js")"
+        test -n "$version" || { echo "::error::no VERSION in $SYNC/index.js"; exit 1; }
+        log="${LOG:-$RUNNER_TEMP/serve-candidate.jsonl}"
+        {
+          echo "SERVE_CANDIDATE_SYNC=$sync"
+          echo "SERVE_CANDIDATE_VERSION=$version"
+          echo "SERVE_CANDIDATE_LOG=$log"
+          echo "APP_SYNC_DIR=$sync"
+          echo "NODE_OPTIONS=${NODE_OPTIONS:+$NODE_OPTIONS }--import $GITHUB_ACTION_PATH/patch.mjs"
+          if [ -n "$UPDATE" ]; then echo "SERVE_CANDIDATE_UPDATE=$(cd "$GITHUB_WORKSPACE" && realpath "$UPDATE")"; fi
+        } >> "$GITHUB_ENV"
+        { echo "version=$version"; echo "log=$log"; echo "kit=$GITHUB_ACTION_PATH"; } >> "$GITHUB_OUTPUT"

@@ -100,6 +100,19 @@ jobs:
       - name: Fixture tests
         working-directory: fixtures/playwright
         run: npx playwright test
+      - name: serve-candidate (plain script, service worker, stale copy, never loaded, SHELL gaps; Playwright 1.56.1)
+        run: PLAYWRIGHT_PATH="$PWD/fixtures/playwright/node_modules/playwright/index.mjs" node --test fixtures/serve-candidate/serve.test.mjs
+      - uses: ./serve-candidate
+        id: candidate
+        with:
+          sync-dir: fixtures/serve-candidate/candidate
+          update-dir: fixtures/serve-candidate/update
+      - name: serve-candidate through the block (its env, then report.mjs on the log)
+        env:
+          PLAYWRIGHT_PATH: ${{ github.workspace }}/fixtures/playwright/node_modules/playwright/index.mjs
+        run: |
+          node fixtures/serve-candidate/run.mjs load | grep -q '"VERSION":"9.9.9-test"'
+          node "${{ steps.candidate.outputs.kit }}/report.mjs" "${{ steps.candidate.outputs.log }}" --row fixture --expect "${{ steps.candidate.outputs.version }}"
 
   rules-kit:
     # common.rules helpers, the builder and the shared suite, on the two worked examples (failing first, see NOTES.md)
