@@ -55,6 +55,31 @@ jobs:
           test -f .devkit/worker/claims.js
           node .devkit/tools/check-links.mjs .
 
+  setup-tools:
+    # the three repo tools, run the way an app runs them: copied by setup-tools, started from the repo root
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./setup-tools
+      - name: Only the kit's folders are copied
+        run: |
+          test -f .devkit/tools/check.mjs
+          test -f .devkit/tools/proofread.mjs
+          test -f .devkit/tools/shots.mjs
+          test ! -d node_modules
+      - name: check and proofread pass on a good fixture
+        working-directory: fixtures/tools/good
+        run: |
+          node ../../../.devkit/tools/check.mjs
+          node ../../../.devkit/tools/proofread.mjs
+      - name: check fails on a SHELL file that does not exist
+        working-directory: fixtures/tools/bad
+        run: |
+          if node ../../../.devkit/tools/check.mjs; then echo "check should have failed"; exit 1; fi
+      - name: shots lists no pages for an empty diff
+        run: test "$(node .devkit/tools/shots.mjs pages HEAD)" = '[]'
+
   playwright-kit:
     # base config + emulator helpers, run through the blocks the way an app uses them
     runs-on: ubuntu-24.04
@@ -136,13 +161,13 @@ jobs:
           firebase --version | grep -qx '13.29.1'
           ls ~/.cache/firebase/emulators/cloud-firestore-emulator-*.jar
       - name: npx finds the same firebase-tools without downloading
-        # cold, npx installs the package (about 10 s); from its cache it answers in about 2 s
+        # npm's http log shows every request: a download is a .tgz fetch (metadata checks are fine). This replaces a
+        # timing check that runner speed pushed across its limit.
         run: |
-          start=$(date +%s.%N)
-          npx --prefer-offline --yes firebase-tools@13.29.1 --version | grep -qx '13.29.1'
-          took=$(echo "$(date +%s.%N) - $start" | bc)
-          echo "npx took ${took}s"
-          test "$(echo "$took < 6" | bc)" = 1
+          npx --prefer-offline --yes --loglevel=http firebase-tools@13.29.1 --version > npx.log 2>&1
+          cat npx.log
+          grep -qx '13.29.1' npx.log
+          if grep -q '\.tgz' npx.log; then echo "npx downloaded the package"; exit 1; fi
 
   deploy-worker-dry-run:
     uses: ./.github/workflows/deploy-worker.yml

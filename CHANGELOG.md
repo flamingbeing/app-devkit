@@ -3,6 +3,22 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.6.0
+
+- New block `setup-tools`: copies the kit's `tools/`, `playwright/`, `rules/` and `worker/` into `.devkit/` with no Node or
+  browser step, for jobs that only run a tool.
+- Repo tools, moved here from the 8 app repos that carried byte-identical copies. Run from the repo root as
+  `node .devkit/tools/<name>.mjs`. Same behaviour as the app copies, except: they read the repo from the working
+  directory (the copies read the folder above the script), and `proofread` also skips `test-results/` and
+  `playwright-report/` (kakihome's copy already did).
+  - `check.mjs`: each app's `sw.js` VERSION and cache rules, SHELL files exist, `wrangler.jsonc` keeps preview links off,
+    Worker tests pass.
+  - `proofread.mjs`: lang, title, viewport, noindex, alt text, links to files; `--live` and `--md`.
+  - `shots.mjs`: phone screenshots (`pages <base-ref>`, `shoot <url> …`).
+- `stamp-versions.mjs` is not here: the app copies have diverged into two generations, tests import it, and Cloudflare
+  builds run it from the repo, so it stays per app for now.
+- CI: `setup-tools` job runs the tools on a good and a bad fixture (`fixtures/tools/`).
+
 ## 1.5.0
 
 - `rules/common.rules`: `stampKept()` (`serverAt` unchanged from the stored document, for older clients' partial updates;

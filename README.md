@@ -1,6 +1,6 @@
 # app-devkit
 
-Small, reusable GitHub Actions pieces for web apps: three **building blocks** (composite actions) for CI, and two
+Small, reusable GitHub Actions pieces for web apps: four **building blocks** (composite actions) for CI, and two
 **reusable workflows** for deploys. Each app keeps its own test commands; this repo only holds the repeated setup.
 
 ## Versions and pinning
@@ -12,7 +12,7 @@ Small, reusable GitHub Actions pieces for web apps: three **building blocks** (c
 
 ## Building blocks
 
-All three run on `ubuntu-24.04` (pin your jobs there too: `ubuntu-latest` can move to a release your pinned Playwright
+All four run on `ubuntu-24.04` (pin your jobs there too: `ubuntu-latest` can move to a release your pinned Playwright
 cannot install on). Call them after `actions/checkout`.
 
 ### `setup-node`
@@ -53,6 +53,15 @@ Java 21, a pinned firebase-tools, and the emulator jars cached and fetched up fr
 skip), at the same ref the action runs from; `setup-emulators` does the same when you pass `devkit-dir: .devkit` (off by
 default), for a rules-only job. Add `.devkit/` to `.gitignore`.
 
+### `setup-tools`
+
+Only copies the kit's folders into `.devkit/` (no Node, browser or emulators), for jobs that run a tool and nothing else.
+
+```yaml
+- uses: flamingbeing/app-devkit/setup-tools@v1
+- run: node .devkit/tools/check.mjs
+```
+
 ## Playwright base, helpers and tools
 
 Plain ES modules with no dependencies, imported from `.devkit/` after `setup-browser` (so a repo with no `package.json`
@@ -77,6 +86,10 @@ email)` makes or signs in an Auth emulator account; `emulatorServer` refuses a p
 
 Tools (run with `node .devkit/tools/<name>.mjs`):
 
+- `check.mjs`: repo checks (service-worker `VERSION` and cache rules, SHELL files exist, `wrangler.jsonc` keeps preview links
+  off, Worker tests). Run from the repo root.
+- `proofread.mjs [--live] [--md]`: mistakes no app test looks for (lang, title, viewport, noindex, alt text, links to files).
+- `shots.mjs pages <base-ref> | shoot <url> <out-dir> <name> <path>…`: phone screenshots for a visual change.
 - `step-timings.mjs <owner/repo> <run-id>`: job and step durations, to compare CI before and after a change.
 - `check-links.mjs [folder]`: fails on a relative link or `#anchor` in `.md`/`.html` that points nowhere.
 
