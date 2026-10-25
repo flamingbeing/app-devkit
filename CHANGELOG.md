@@ -3,6 +3,12 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.7.0
+
+- `setup-emulators`: falls back to a normal install when the firebase-tools cache is restored but unusable (partial copy
+  or wrong version), and fills npx's store with `--prefer-offline` so a cold npx store fetches instead of failing with
+  `cache mode is 'only-if-cached'`. Same inputs and outputs; `firebase-tools-cache-hit` still reports the cache restore.
+
 ## 1.6.0
 
 - New block `setup-tools`: copies the kit's `tools/`, `playwright/`, `rules/` and `worker/` into `.devkit/` with no Node or
