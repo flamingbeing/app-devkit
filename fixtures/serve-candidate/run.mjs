@@ -1,14 +1,15 @@
 // A plain Playwright script, the way the apps' own e2e scripts launch Chromium (no @playwright/test).
 // argv[2]: 'load' (imports the pinned engine), 'stale' (the script itself serves an older engine for the pinned URL,
 // as a cached copy would), 'none' (never loads the engine), 'missing' (also asks for a file the candidate lacks), 'sw' (a service worker stores the engine at install and
-// the page runs it from that cache after a reload).
+// the page runs it from that cache after a reload), 'app' (a modules-only page: loads the app.js entry, never index.js).
 const pw = await import(process.env.PLAYWRIGHT_PATH || 'playwright');
 const { chromium } = pw.default || pw;
 const mode = process.argv[2];
 const browser = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {});
 const page = await browser.newPage();
+const entry = mode === 'app' ? 'app.js' : 'index.js';
 const html = mode === 'none' ? '<p>no engine</p>' : `<script type="module">
-  import { VERSION, part } from 'https://core.example.test/sync/0.6.3/index.js';
+  import { VERSION, part } from 'https://core.example.test/sync/0.6.3/${entry}';
   import { label } from 'https://core.example.test/update/0.2.0/register.js';
   window.got = { VERSION, part, label };
 </script>${mode === 'missing' ? '<script type="module" src="https://core.example.test/sync/0.6.3/src/gone.js"></script>' : ''}`;

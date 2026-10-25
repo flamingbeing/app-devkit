@@ -3,6 +3,13 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.9.1
+
+- `serve-candidate`: a page that loads the engine's `app.js` entry (a modules-only app, no `index.js`) is checked
+  too: the preload imports that `app.js` before the page closes and logs its `VERSION` (app-sync 0.9.3 and later
+  export it there). Before, such a page never counted as having loaded the engine and its row failed. CI fixture:
+  `run.mjs app`.
+
 ## 1.9.0
 
 - New block `serve-candidate`: an app's own browser tests run on a candidate engine build with no app change. A Node

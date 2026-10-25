@@ -1,8 +1,9 @@
 // serve-candidate preload (node --import): every Playwright browser context this process opens serves
 // <SERVE_CANDIDATE_ORIGIN>/sync/<any>/<file> from SERVE_CANDIDATE_SYNC and /update/<any>/<file> from
 // SERVE_CANDIDATE_UPDATE, so an app's own browser tests run on a candidate engine with no change to the app.
-// Before a page or context closes, the page imports each engine index.js it asked for and the VERSION it really
-// got is written to SERVE_CANDIDATE_LOG (one JSON line per context); report.mjs turns that into the row's result.
+// Before a page or context closes, the page imports each engine entry it asked for (index.js, or app.js on a
+// modules-only page; app.js exports VERSION from app-sync 0.9.3) and the VERSION it really got is written to
+// SERVE_CANDIDATE_LOG (one JSON line per context); report.mjs turns that into the row's result.
 // Works for @playwright/test and plain scripts, for any copy of Playwright the process loads (local or global).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,7 +14,7 @@ const LOG = process.env.SERVE_CANDIDATE_LOG;
 const ORIGIN = (process.env.SERVE_CANDIDATE_ORIGIN || '').replace(/\/+$/, '');
 const esc = ORIGIN.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 const CORE = new RegExp(`^${esc}/(sync|update)/([^/]+)/([^?#]*)`);
-const INDEX = new RegExp(`^${esc}/sync/[^/]+/index\\.js(?:[?#]|$)`);
+const INDEX = new RegExp(`^${esc}/sync/[^/]+/(?:index|app)\\.js(?:[?#]|$)`);
 const TYPES = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.html': 'text/html' };
 const DONE = Symbol.for('serve-candidate');
 const open = new Set();
