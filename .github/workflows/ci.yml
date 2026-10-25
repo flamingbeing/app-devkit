@@ -79,6 +79,8 @@ jobs:
           if node ../../../.devkit/tools/check.mjs; then echo "check should have failed"; exit 1; fi
       - name: shots lists no pages for an empty diff
         run: test "$(node .devkit/tools/shots.mjs pages HEAD)" = '[]'
+      - name: starter-drift reports a filled app's changes and never writes
+        run: node --test fixtures/starter/drift.test.mjs
 
   playwright-kit:
     # base config + emulator helpers, run through the blocks the way an app uses them

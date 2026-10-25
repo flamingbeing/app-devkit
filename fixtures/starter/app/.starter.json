@@ -1,0 +1,1 @@
+{ "template": "example/template", "version": "0.1.0", "commit": "bbbbbbbb22222222", "app": { "name": "pets", "host": "pets.example.org", "kit": "b", "project": "pets-1", "title": "Pets" } }
