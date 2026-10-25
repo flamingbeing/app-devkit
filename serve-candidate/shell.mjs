@@ -1,5 +1,5 @@
-// serve-candidate SHELL check: node shell.mjs --files <files.json> [--row <name>] [--strict] <dir>...
-// For each sw.js under the folders, compares the engine files it names (core.anawj.com/sync/<v>/<file>) with the
+// serve-candidate SHELL check: node shell.mjs --files <files.json> --origin <url> [--row <name>] [--strict] <dir>...
+// For each sw.js under the folders, compares the engine files it names (<origin>/sync/<v>/<file>) with the
 // build's file list: "missing" ones are not stored for offline use, "not in the build" ones fail the install.
 // Prints markdown table rows (and adds them to $GITHUB_STEP_SUMMARY). Reports only; --strict exits 1 on a gap.
 import fs from 'node:fs';
@@ -9,6 +9,9 @@ const args = process.argv.slice(2);
 const opt = name => { const i = args.indexOf('--' + name); return i < 0 ? '' : args.splice(i, 2)[1]; };
 const files = JSON.parse(fs.readFileSync(opt('files'), 'utf8'));
 const row = opt('row') || 'app';
+const origin = (opt('origin') || process.env.SERVE_CANDIDATE_ORIGIN || '').replace(/\/+$/, '');
+if (!origin) { console.error('shell.mjs: --origin <url> (or SERVE_CANDIDATE_ORIGIN) is needed'); process.exit(2); }
+const NAMED = new RegExp(origin.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + "/sync/([^/'\"`]+)/([^'\"`\\s?#]+)", 'g');
 const strict = args.includes('--strict') ? (args.splice(args.indexOf('--strict'), 1), true) : false;
 const SKIP = new Set(['node_modules', '.git', '.devkit', 'test-results', 'playwright-report']);
 const sws = [];
@@ -22,7 +25,7 @@ for (const dir of args) {
   for (const sw of sws.splice(0)) {
     const text = fs.readFileSync(sw, 'utf8');
     const named = new Map();
-    for (const [, v, rel] of text.matchAll(/https:\/\/core\.anawj\.com\/sync\/([^/'"`]+)\/([^'"`\s?#]+)/g)) (named.get(v) || named.set(v, new Set()).get(v)).add(rel);
+    for (const [, v, rel] of text.matchAll(NAMED)) (named.get(v) || named.set(v, new Set()).get(v)).add(rel);
     if (!named.size) { rows.push(`| ${row} | ${path.relative(dir, sw)} | - | no engine files listed | |`); continue; }
     for (const [v, rels] of named) {
       const missing = files.filter(f => !rels.has(f)), extra = [...rels].filter(f => !files.includes(f));

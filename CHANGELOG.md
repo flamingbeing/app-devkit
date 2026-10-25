@@ -5,13 +5,14 @@ becomes `v2`.
 
 ## 1.9.0
 
-- New block `serve-candidate`: an app's own browser tests run on a candidate app-sync build with no app change. A Node
-  preload (set through `NODE_OPTIONS`) patches every Playwright copy the process loads, so each browser context serves
-  `core.anawj.com/sync/<any>/` and `/update/<any>/` from local folders, a service worker's install fetches included
+- New block `serve-candidate`: an app's own browser tests run on a candidate engine build with no app change. A Node
+  preload (the `node-options` output, set as `NODE_OPTIONS` on the test step) patches every Playwright copy the process
+  loads, so each browser context serves `<origin>/sync/<any>/` and `/update/<any>/` from local folders, a service worker's install fetches included
   (Playwright 1.56 skips routes for those unless `PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS` is on, which the
   preload sets). Each page's real engine `VERSION` is logged before it closes; `report.mjs` fails a row that never ran
-  the candidate or ran another version, and `shell.mjs` reports each `sw.js` list against the build's `files.json`.
-  CI: `fixtures/serve-candidate/` (plain script, service worker, stale copy, never loaded, SHELL gaps).
+  the candidate, ran another version, left a page unchecked or asked for a file the candidate lacks; `shell.mjs`
+  reports each `sw.js` list against the build's `files.json`. The engine's origin is an input (nothing app-specific).
+  CI: `fixtures/serve-candidate/` (plain script, service worker, stale copy, missing file, never loaded, SHELL gaps).
 
 ## 1.8.0
 

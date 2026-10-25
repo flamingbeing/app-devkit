@@ -1,18 +1,29 @@
 name: Serve a candidate engine
 description: >-
-  Every Playwright browser context in later steps serves core.anawj.com/sync/<any>/ and /update/<any>/ from local
-  folders (an app-sync candidate), and logs the engine VERSION each page really ran, for report.mjs.
+  Every Playwright browser context in steps that set NODE_OPTIONS to this block's node-options output serves
+  <origin>/sync/<any>/ and /update/<any>/ from local folders (an engine candidate), and logs the engine VERSION each
+  page really ran, for report.mjs.
 inputs:
+  origin:
+    description: The engine's origin, as the app pins it (for example https://core.example.com).
+    required: true
   sync-dir:
     description: Folder with the candidate's index.js and src/ (an app-sync checkout), relative to the workspace.
     required: true
   update-dir:
-    description: Folder served for core.anawj.com/update/<any>/ (app-sync's update/). Empty = the live update module.
+    description: Folder served for <origin>/update/<any>/ (the engine's update/). Empty = the live update module.
     default: ''
   log:
-    description: Where the preload writes one JSON line per browser context. Empty = $RUNNER_TEMP/serve-candidate.jsonl.
+    description: >-
+      Where the preload writes one JSON line per browser context. Empty = a new file under $RUNNER_TEMP for this
+      call. The file is emptied here, so an earlier run's lines never count.
     default: ''
 outputs:
+  node-options:
+    description: >-
+      Set NODE_OPTIONS to this in the env of each step whose tests should see the candidate (GitHub does not allow
+      NODE_OPTIONS through GITHUB_ENV).
+    value: ${{ steps.env.outputs.node-options }}
   version:
     description: The candidate's VERSION (from its index.js), for report.mjs --expect.
     value: ${{ steps.env.outputs.version }}
@@ -31,18 +42,20 @@ runs:
         SYNC: ${{ inputs.sync-dir }}
         UPDATE: ${{ inputs.update-dir }}
         LOG: ${{ inputs.log }}
+        ORIGIN: ${{ inputs.origin }}
       run: |
+        case "$ORIGIN" in https://*) ;; *) echo "::error::origin must be an https:// URL"; exit 1;; esac
         sync="$(cd "$GITHUB_WORKSPACE" && realpath "$SYNC")"
         test -f "$sync/index.js" || { echo "::error::no index.js in $SYNC"; exit 1; }
         version="$(sed -n "s/^export const VERSION = '\([^']*\)'.*/\1/p" "$sync/index.js")"
         test -n "$version" || { echo "::error::no VERSION in $SYNC/index.js"; exit 1; }
-        log="${LOG:-$RUNNER_TEMP/serve-candidate.jsonl}"
+        log="${LOG:-$(mktemp "$RUNNER_TEMP/serve-candidate-XXXXXX.jsonl")}"
+        : > "$log"
         {
           echo "SERVE_CANDIDATE_SYNC=$sync"
           echo "SERVE_CANDIDATE_VERSION=$version"
           echo "SERVE_CANDIDATE_LOG=$log"
-          echo "APP_SYNC_DIR=$sync"
-          echo "NODE_OPTIONS=${NODE_OPTIONS:+$NODE_OPTIONS }--import $GITHUB_ACTION_PATH/patch.mjs"
+          echo "SERVE_CANDIDATE_ORIGIN=$ORIGIN"
           if [ -n "$UPDATE" ]; then echo "SERVE_CANDIDATE_UPDATE=$(cd "$GITHUB_WORKSPACE" && realpath "$UPDATE")"; fi
         } >> "$GITHUB_ENV"
-        { echo "version=$version"; echo "log=$log"; echo "kit=$GITHUB_ACTION_PATH"; } >> "$GITHUB_OUTPUT"
+        { echo "node-options=${NODE_OPTIONS:+$NODE_OPTIONS }--import $GITHUB_ACTION_PATH/patch.mjs"; echo "version=$version"; echo "log=$log"; echo "kit=$GITHUB_ACTION_PATH"; } >> "$GITHUB_OUTPUT"

@@ -1,5 +1,5 @@
 // serve-candidate preload (node --import): every Playwright browser context this process opens serves
-// https://core.anawj.com/sync/<any>/<file> from SERVE_CANDIDATE_SYNC and /update/<any>/<file> from
+// <SERVE_CANDIDATE_ORIGIN>/sync/<any>/<file> from SERVE_CANDIDATE_SYNC and /update/<any>/<file> from
 // SERVE_CANDIDATE_UPDATE, so an app's own browser tests run on a candidate engine with no change to the app.
 // Before a page or context closes, the page imports each engine index.js it asked for and the VERSION it really
 // got is written to SERVE_CANDIDATE_LOG (one JSON line per context); report.mjs turns that into the row's result.
@@ -10,8 +10,10 @@ import { createRequire } from 'node:module';
 
 const DIRS = { sync: process.env.SERVE_CANDIDATE_SYNC, update: process.env.SERVE_CANDIDATE_UPDATE };
 const LOG = process.env.SERVE_CANDIDATE_LOG;
-const CORE = /^https:\/\/core\.anawj\.com\/(sync|update)\/([^/]+)\/([^?#]*)/;
-const INDEX = /^https:\/\/core\.anawj\.com\/sync\/[^/]+\/index\.js(?:[?#]|$)/;
+const ORIGIN = (process.env.SERVE_CANDIDATE_ORIGIN || '').replace(/\/+$/, '');
+const esc = ORIGIN.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+const CORE = new RegExp(`^${esc}/(sync|update)/([^/]+)/([^?#]*)`);
+const INDEX = new RegExp(`^${esc}/sync/[^/]+/index\\.js(?:[?#]|$)`);
 const TYPES = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.html': 'text/html' };
 const DONE = Symbol.for('serve-candidate');
 const open = new Set();
@@ -21,8 +23,9 @@ process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS ??= '1';
 
 function record(state) {
   if (state.written || !LOG) return;
+  for (const page of state.pages) for (const url of page[DONE] || []) state.unchecked.push(url);
   state.written = true;
-  const { written, pinned, ...line } = state;
+  const { written, pinned, pages, ...line } = state;
   fs.appendFileSync(LOG, JSON.stringify({ ...line, pinned: [...pinned] }) + '\n');
 }
 
@@ -39,8 +42,8 @@ async function checkPage(state, page) {
 }
 
 async function attach(context) {
-  if (!context || context[DONE]) return context;
-  const state = { pid: process.pid, served: { sync: 0, update: 0 }, pinned: new Set(), notFound: [], checked: [] };
+  if (!context || context[DONE] || !ORIGIN || !DIRS.sync) return context;
+  const state = { pid: process.pid, served: { sync: 0, update: 0 }, pinned: new Set(), notFound: [], checked: [], unchecked: [], pages: new Set() };
   context[DONE] = state;
   open.add(state);
   await context.route(CORE, route => {
@@ -59,7 +62,10 @@ async function attach(context) {
   const watch = page => {
     if (page[DONE]) return;
     page[DONE] = new Set();
-    page.on('request', req => { if (INDEX.test(req.url())) page[DONE].add(req.url().replace(/[?#].*$/, '')); });
+    state.pages.add(page);
+    // the exact URL (a query string makes another module); a page closed some other way counts as unchecked
+    page.on('request', req => { if (INDEX.test(req.url())) page[DONE].add(req.url().replace(/#.*$/, '')); });
+    page.on('close', () => { for (const url of page[DONE]) state.unchecked.push(url); page[DONE].clear(); });
     const close = page.close.bind(page);
     page.close = async (...a) => { await checkPage(state, page); return close(...a); };
   };
@@ -114,3 +120,4 @@ for (const base of from) {
   }
 }
 process.on('exit', () => { for (const state of open) record(state); });
+if (!ORIGIN || !DIRS.sync) console.warn('serve-candidate: SERVE_CANDIDATE_ORIGIN and SERVE_CANDIDATE_SYNC must be set; nothing is swapped');

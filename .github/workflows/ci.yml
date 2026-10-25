@@ -105,12 +105,15 @@ jobs:
       - uses: ./serve-candidate
         id: candidate
         with:
+          origin: https://core.example.test
           sync-dir: fixtures/serve-candidate/candidate
           update-dir: fixtures/serve-candidate/update
       - name: serve-candidate through the block (its env, then report.mjs on the log)
         env:
           PLAYWRIGHT_PATH: ${{ github.workspace }}/fixtures/playwright/node_modules/playwright/index.mjs
+          NODE_OPTIONS: ${{ steps.candidate.outputs.node-options }}
         run: |
+          test -n "$SERVE_CANDIDATE_SYNC" && test -f "$SERVE_CANDIDATE_LOG"
           node fixtures/serve-candidate/run.mjs load | grep -q '"VERSION":"9.9.9-test"'
           node "${{ steps.candidate.outputs.kit }}/report.mjs" "${{ steps.candidate.outputs.log }}" --row fixture --expect "${{ steps.candidate.outputs.version }}"
 
