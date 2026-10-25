@@ -161,13 +161,9 @@ jobs:
           firebase --version | grep -qx '13.29.1'
           ls ~/.cache/firebase/emulators/cloud-firestore-emulator-*.jar
       - name: npx finds the same firebase-tools without downloading
-        # cold, npx installs the package (about 10 s); from its cache it answers in about 2 s
-        run: |
-          start=$(date +%s.%N)
-          npx --prefer-offline --yes firebase-tools@13.29.1 --version | grep -qx '13.29.1'
-          took=$(echo "$(date +%s.%N) - $start" | bc)
-          echo "npx took ${took}s"
-          test "$(echo "$took < 6" | bc)" = 1
+        # --offline answers only from the local npx store, so this fails if the cached copy is not the one npx uses
+        # (a timing check was flaky: runner speed moved it across the limit)
+        run: npx --offline --yes firebase-tools@13.29.1 --version | grep -qx '13.29.1'
 
   deploy-worker-dry-run:
     uses: ./.github/workflows/deploy-worker.yml
