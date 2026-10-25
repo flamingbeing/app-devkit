@@ -161,9 +161,13 @@ jobs:
           firebase --version | grep -qx '13.29.1'
           ls ~/.cache/firebase/emulators/cloud-firestore-emulator-*.jar
       - name: npx finds the same firebase-tools without downloading
-        # --offline answers only from the local npx store, so this fails if the cached copy is not the one npx uses
-        # (a timing check was flaky: runner speed moved it across the limit)
-        run: npx --offline --yes firebase-tools@13.29.1 --version | grep -qx '13.29.1'
+        # npm's http log shows every request: a download is a .tgz fetch (metadata checks are fine). This replaces a
+        # timing check that runner speed pushed across its limit.
+        run: |
+          npx --prefer-offline --yes --loglevel=http firebase-tools@13.29.1 --version > npx.log 2>&1
+          cat npx.log
+          grep -qx '13.29.1' npx.log
+          if grep -q '\.tgz' npx.log; then echo "npx downloaded the package"; exit 1; fi
 
   deploy-worker-dry-run:
     uses: ./.github/workflows/deploy-worker.yml
