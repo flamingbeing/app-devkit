@@ -1,0 +1,18 @@
+name: Set up the kit's tools
+description: >-
+  Copies the kit's `tools/`, `playwright/`, `rules/` and `worker/` folders into `.devkit/` (at the same ref the action runs
+  from) with no Node, browser or emulator step, for jobs that only run a tool such as `check`, `proofread` or `shots`.
+inputs:
+  devkit-dir:
+    description: Folder (relative to the workspace) to copy into. Add it to .gitignore.
+    default: .devkit
+runs:
+  using: composite
+  steps:
+    - name: Copy the kit's files
+      shell: bash
+      env:
+        DEVKIT_DIR: ${{ inputs.devkit-dir }}
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/$DEVKIT_DIR"
+        cp -R "$GITHUB_ACTION_PATH/../playwright" "$GITHUB_ACTION_PATH/../rules" "$GITHUB_ACTION_PATH/../tools" "$GITHUB_ACTION_PATH/../worker" "$GITHUB_WORKSPACE/$DEVKIT_DIR/"
