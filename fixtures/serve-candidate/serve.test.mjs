@@ -50,6 +50,14 @@ test('an engine file the candidate lacks fails the row (it answers 404, never th
   assert.match(r.stdout, /not in the candidate: sync\/src\/gone\.js/);
 });
 
+test('a modules-only page (the app.js entry, no index.js) is checked too; the row passes', () => {
+  const { got, log } = run('app');
+  assert.deepEqual(got, { VERSION: '9.9.9-test', part: 'candidate', label: 'candidate update' });
+  const line = JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n').pop());
+  assert.deepEqual(line.checked.map(c => [c.url.replace(/^.*\/sync\//, ''), c.version]), [['0.6.3/app.js', '9.9.9-test']]);
+  assert.equal(report(log).status, 0);
+});
+
 test('a run that never loads the engine fails the row (nothing proves the candidate ran)', () => {
   const { log } = run('none');
   const r = report(log);

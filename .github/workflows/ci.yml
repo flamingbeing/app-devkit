@@ -100,7 +100,7 @@ jobs:
       - name: Fixture tests
         working-directory: fixtures/playwright
         run: npx playwright test
-      - name: serve-candidate (plain script, service worker, stale copy, never loaded, SHELL gaps; Playwright 1.56.1)
+      - name: serve-candidate (plain script, service worker, stale copy, app.js entry, never loaded, SHELL gaps; Playwright 1.56.1)
         run: PLAYWRIGHT_PATH="$PWD/fixtures/playwright/node_modules/playwright/index.mjs" node --test fixtures/serve-candidate/serve.test.mjs
       - uses: ./serve-candidate
         id: candidate
