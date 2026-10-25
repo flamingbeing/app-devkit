@@ -92,6 +92,10 @@ Tools (run with `node .devkit/tools/<name>.mjs`):
 - `shots.mjs pages <base-ref> | shoot <url> <out-dir> <name> <path>…`: phone screenshots for a visual change.
 - `step-timings.mjs <owner/repo> <run-id>`: job and step durations, to compare CI before and after a change.
 - `check-links.mjs [folder]`: fails on a relative link or `#anchor` in `.md`/`.html` that points nowhere.
+- `starter-drift.mjs --template <checkout> [--app .] [--json] [--strict]`: for an app made from a starter template (its
+  `.starter.json` records the template version, commit and the app's values), lists the template's files the app has
+  changed or lacks, comparing each with the template file filled for this app (the template's `tools/fill.mjs`
+  `swapsFor`). Reports only, never writes; `--strict` exits 1 on any drift.
 
 ## Rules kit
 

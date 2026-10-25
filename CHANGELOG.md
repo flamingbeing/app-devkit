@@ -3,6 +3,13 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.8.0
+
+- New tool `tools/starter-drift.mjs`: drift report for an app made from a starter template (`.starter.json`): which
+  template files the app changed or lacks, and whether its recorded template version is behind. Uses the template's own
+  `tools/fill.mjs` (`swapsFor`, `files`, `KEEP_FILES`, optional `fixup`) so filling and comparing never disagree.
+  Reports only. CI: tested on `fixtures/starter/`.
+
 ## 1.7.0
 
 - `setup-emulators`: falls back to a normal install when the firebase-tools cache is restored but unusable (partial copy
