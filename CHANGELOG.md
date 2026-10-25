@@ -3,6 +3,17 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.9.0
+
+- New block `serve-candidate`: an app's own browser tests run on a candidate engine build with no app change. A Node
+  preload (the `node-options` output, set as `NODE_OPTIONS` on the test step) patches every Playwright copy the process
+  loads, so each browser context serves `<origin>/sync/<any>/` and `/update/<any>/` from local folders, a service worker's install fetches included
+  (Playwright 1.56 skips routes for those unless `PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS` is on, which the
+  preload sets). Each page's real engine `VERSION` is logged before it closes; `report.mjs` fails a row that never ran
+  the candidate, ran another version, left a page unchecked or asked for a file the candidate lacks; `shell.mjs`
+  reports each `sw.js` list against the build's `files.json`. The engine's origin is an input (nothing app-specific).
+  CI: `fixtures/serve-candidate/` (plain script, service worker, stale copy, missing file, never loaded, SHELL gaps).
+
 ## 1.8.0
 
 - New tool `tools/starter-drift.mjs`: drift report for an app made from a starter template (`.starter.json`): which

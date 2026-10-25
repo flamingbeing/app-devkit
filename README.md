@@ -1,6 +1,6 @@
 # app-devkit
 
-Small, reusable GitHub Actions pieces for web apps: four **building blocks** (composite actions) for CI, and two
+Small, reusable GitHub Actions pieces for web apps: five **building blocks** (composite actions) for CI, and two
 **reusable workflows** for deploys. Each app keeps its own test commands; this repo only holds the repeated setup.
 
 ## Versions and pinning
@@ -12,7 +12,7 @@ Small, reusable GitHub Actions pieces for web apps: four **building blocks** (co
 
 ## Building blocks
 
-All four run on `ubuntu-24.04` (pin your jobs there too: `ubuntu-latest` can move to a release your pinned Playwright
+All five run on `ubuntu-24.04` (pin your jobs there too: `ubuntu-latest` can move to a release your pinned Playwright
 cannot install on). Call them after `actions/checkout`.
 
 ### `setup-node`
@@ -61,6 +61,39 @@ Only copies the kit's folders into `.devkit/` (no Node, browser or emulators), f
 - uses: flamingbeing/app-devkit/setup-tools@v1
 - run: node .devkit/tools/check.mjs
 ```
+
+### `serve-candidate`
+
+For the engine's own CI: run an app's browser tests on a candidate engine build, with no change to the app. Every
+Playwright browser context in a step that sets `NODE_OPTIONS` to the block's `node-options` output (`@playwright/test` or a plain script; any Playwright copy
+the process loads) serves `<origin>/sync/<any version>/` from `sync-dir` and `/update/<any version>/`
+from `update-dir`, a service worker's own fetches included. Files the candidate lacks answer 404 (logged), never the
+live copy.
+
+Proof, not trust: before each page or context closes, the page imports every engine `index.js` it asked for and the
+`VERSION` it really ran is logged. `report.mjs` passes a row only when at least one page was checked, every checked
+page ran the candidate (a stale cache or a live fallback shows as another version), no page that asked for the engine
+closed unchecked, and no engine file asked for was missing from the candidate. Contexts are new browser
+profiles, so no service worker from an earlier run is in the way.
+
+```yaml
+- uses: flamingbeing/app-devkit/serve-candidate@v1.9.0
+  id: candidate
+  with:
+    origin: https://core.example.com   # the engine's origin, as the app pins it
+    sync-dir: candidate            # the engine checkout
+    update-dir: candidate/update   # empty = the live update module
+- run: npx playwright test
+  env:
+    NODE_OPTIONS: ${{ steps.candidate.outputs.node-options }}   # GitHub refuses NODE_OPTIONS through GITHUB_ENV
+- run: node "${{ steps.candidate.outputs.kit }}/report.mjs" "${{ steps.candidate.outputs.log }}" --row my-app --expect "${{ steps.candidate.outputs.version }}"
+- run: node "${{ steps.candidate.outputs.kit }}/shell.mjs" --files candidate/files.json --origin https://core.example.com --row my-app .
+```
+
+- `report.mjs <log> --row <name> --expect <version>`: one markdown row `| row | pass/fail | expected | pinned | note |`
+  (also added to the job summary); exit 1 on fail.
+- `shell.mjs --files <files.json> --origin <url> [--row <name>] [--strict] <dir>…`: for each `sw.js`, the engine files its list
+  misses (not stored offline) or names that the build lacks (the install fails). Reports only; `--strict` exits 1.
 
 ## Playwright base, helpers and tools
 
