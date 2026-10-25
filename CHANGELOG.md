@@ -3,6 +3,14 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.9.2
+
+- `tools/check-links.mjs` and `tools/proofread.mjs`: a link or `src` in a page that is missing next to the page is also
+  looked up in `<page folder>/public/<rest>` (the Vite-lite layout, where `app.css`, `manifest.webmanifest` and icons
+  live in `app/public/`), the same fallback the Worker and `stamp-versions` use. The old layout is unchanged and a file
+  missing from both places is still reported. No new input or option. CI: `fixtures/tools/public` (passes) and
+  `fixtures/tools/public-missing` (fails).
+
 ## 1.9.1
 
 - `serve-candidate`: a page that loads the engine's `app.js` entry (a modules-only app, no `index.js`) is checked

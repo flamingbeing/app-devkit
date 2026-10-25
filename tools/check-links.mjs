@@ -27,6 +27,18 @@ const anchorsOf = f => {
   return anchors.get(f);
 };
 
+// a page in <dir> may keep its files in <dir>/public/ (the Vite-lite layout); the Worker serves them from the same URL
+const resolveLink = (from, rel) => {
+  const target = path.resolve(path.dirname(from), rel);
+  if (fs.existsSync(target)) return target;
+  const dir = path.dirname(from), inside = path.relative(dir, target);
+  if (inside && !inside.startsWith('..') && !path.isAbsolute(inside) && !inside.split(path.sep)[0].startsWith('public')) {
+    const alt = path.join(dir, 'public', inside);
+    if (fs.existsSync(alt)) return alt;
+  }
+  return target;
+};
+
 const bad = [];
 for (const f of files) {
   const s = fs.readFileSync(f, 'utf8').replace(/```[\s\S]*?```/g, '');
@@ -36,7 +48,7 @@ for (const f of files) {
   for (const l of links) {
     if (/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(l)) continue;
     const [file, hash] = l.split('#');
-    const target = file ? path.resolve(path.dirname(f), decodeURIComponent(file)) : f;
+    const target = file ? resolveLink(f, decodeURIComponent(file)) : f;
     if (!fs.existsSync(target)) { bad.push(`${path.relative(root, f)}: ${l} (no such file)`); continue; }
     if (hash && fs.statSync(target).isFile() && /\.(md|html?)$/i.test(target) && !anchorsOf(target).has(decodeURIComponent(hash))) bad.push(`${path.relative(root, f)}: ${l} (no such heading)`);
   }
