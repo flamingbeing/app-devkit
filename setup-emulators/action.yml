@@ -47,15 +47,23 @@ runs:
           ~/.npm/_npx
         key: firebase-tools-${{ runner.os }}-${{ runner.arch }}-${{ inputs.firebase-tools-version }}
     - name: Install firebase-tools
-      if: steps.fbt-cache.outputs.cache-hit != 'true'
+      # runs on a cache miss, and also when a restored cache is unusable (partial or wrong version): fall back to a normal install
       shell: bash
       env:
         FB_VERSION: ${{ inputs.firebase-tools-version }}
         FB_DIR: ${{ steps.fbt.outputs.dir }}
+        CACHE_HIT: ${{ steps.fbt-cache.outputs.cache-hit }}
       run: |
-        npm install --prefix "$FB_DIR" --no-audit --no-fund --loglevel=error "firebase-tools@$FB_VERSION"
-        # fill npx's own store too, so `npx firebase-tools@<same version>` in a caller does not download again
-        npx --yes "firebase-tools@$FB_VERSION" --version
+        if [ "$CACHE_HIT" = true ] && [ "$("$FB_DIR/node_modules/.bin/firebase" --version 2>/dev/null)" = "$FB_VERSION" ]; then
+          echo "firebase-tools $FB_VERSION restored from the cache"
+        else
+          [ "$CACHE_HIT" = true ] && echo "::notice::firebase-tools cache is unusable; installing normally"
+          rm -rf "$FB_DIR"
+          npm install --prefix "$FB_DIR" --no-audit --no-fund --loglevel=error "firebase-tools@$FB_VERSION"
+        fi
+        # fill npx's own store too, so `npx firebase-tools@<same version>` in a caller does not download again;
+        # --prefer-offline uses the store when it is there and fetches normally when it is not (never 'only-if-cached')
+        npx --prefer-offline --yes "firebase-tools@$FB_VERSION" --version
     - name: firebase on PATH
       shell: bash
       env:
