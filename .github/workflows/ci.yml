@@ -73,6 +73,16 @@ jobs:
         run: |
           node ../../../.devkit/tools/check.mjs
           node ../../../.devkit/tools/proofread.mjs
+      - name: links to files kept in public/ pass; a missing one still fails
+        run: |
+          cd fixtures/tools/public
+          node ../../../.devkit/tools/check-links.mjs .
+          node ../../../.devkit/tools/proofread.mjs
+          # the missing case is built here, so a repo-wide link check never meets a broken fixture
+          tmp=$(mktemp -d); cp -r . "$tmp"; rm "$tmp/app/public/app.css"; cd "$tmp"
+          kit="$GITHUB_WORKSPACE/.devkit/tools"
+          if node "$kit/check-links.mjs" .; then echo "check-links should have failed"; exit 1; fi
+          if node "$kit/proofread.mjs"; then echo "proofread should have failed"; exit 1; fi
       - name: check fails on a SHELL file that does not exist
         working-directory: fixtures/tools/bad
         run: |

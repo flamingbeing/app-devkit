@@ -28,6 +28,12 @@ function walk(dir, out = []) {
 }
 const files = walk('');
 const exists = rel => fs.existsSync(path.join(ROOT, rel));
+// a page in <dir> may keep its files in <dir>/public/ (the Vite-lite layout); the Worker serves them from the same URL
+const existsFrom = (from, rel) => {
+  if (exists(rel)) return true;
+  const dir = path.posix.dirname(from), inside = dir === '.' ? rel : rel.startsWith(dir + '/') ? rel.slice(dir.length + 1) : null;
+  return inside !== null && !inside.startsWith('public/') && exists(path.posix.join(dir, 'public', inside));
+};
 
 // a link or src inside the repo -> the repo path it points to (null for other sites, mail, data, script-built ones)
 function target(from, ref) {
@@ -38,7 +44,7 @@ function target(from, ref) {
   try { p = decodeURIComponent(p); } catch (e) {}
   if (p.startsWith('..')) return { outside: true, p };
   if (p === '' || p.endsWith('/')) p += 'index.html';
-  else if (!/\.[a-z0-9]+$/i.test(p) && exists(p + '/index.html')) p += '/index.html';
+  else if (!/\.[a-z0-9]+$/i.test(p) && existsFrom(from, p + '/index.html')) p += '/index.html';
   return { p };
 }
 
@@ -62,7 +68,7 @@ for (const f of files.filter(f => f.endsWith('.html'))) {
     const t = target(f, ref);
     if (!t) continue;
     if (t.outside) add(f, `\`${ref}\` points outside the site`);
-    else if (!exists(t.p)) add(f, `\`${ref}\` points to \`${t.p}\`, which doesn't exist`);
+    else if (!existsFrom(f, t.p)) add(f, `\`${ref}\` points to \`${t.p}\`, which doesn't exist`);
   }
 }
 

@@ -121,10 +121,10 @@ Tools (run with `node .devkit/tools/<name>.mjs`):
 
 - `check.mjs`: repo checks (service-worker `VERSION` and cache rules, SHELL files exist, `wrangler.jsonc` keeps preview links
   off, Worker tests). Run from the repo root.
-- `proofread.mjs [--live] [--md]`: mistakes no app test looks for (lang, title, viewport, noindex, alt text, links to files).
+- `proofread.mjs [--live] [--md]`: mistakes no app test looks for (lang, title, viewport, noindex, alt text, links to files; a file missing next to the page is also looked for in `<page folder>/public/`).
 - `shots.mjs pages <base-ref> | shoot <url> <out-dir> <name> <path>…`: phone screenshots for a visual change.
 - `step-timings.mjs <owner/repo> <run-id>`: job and step durations, to compare CI before and after a change.
-- `check-links.mjs [folder]`: fails on a relative link or `#anchor` in `.md`/`.html` that points nowhere.
+- `check-links.mjs [folder]`: fails on a relative link or `#anchor` in `.md`/`.html` that points nowhere (a file missing next to the page is also looked for in `<page folder>/public/`).
 - `starter-drift.mjs --template <checkout> [--app .] [--json] [--strict]`: for an app made from a starter template (its
   `.starter.json` records the template version, commit and the app's values), lists the template's files the app has
   changed or lacks, comparing each with the template file filled for this app (the template's `tools/fill.mjs`
