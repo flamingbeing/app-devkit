@@ -230,3 +230,34 @@ jobs:
       build-rules-check: firestore.app.rules
       devkit-ref: ${{ github.sha }}
       test-command: test -f firestore.rules && node --version
+
+  live-smoke:
+    # the live-smoke helpers and config on a local page, then the reusable workflow's skip path (no secrets)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./setup-node
+        with:
+          working-directory: fixtures/playwright
+      - uses: ./setup-browser
+        with:
+          playwright-version: 1.56.1
+      - name: Live spec against a local page
+        working-directory: fixtures/playwright
+        env:
+          LIVE_URL: http://127.0.0.1:8123
+          LIVE_SPEC: live
+          LIVE_TEST_EMAIL: test-bot@example.test
+          LIVE_TEST_PASSWORD: made-up-password
+        run: |
+          python3 -m http.server 8123 --directory app >/dev/null 2>&1 &
+          sleep 1
+          npx playwright test -c "$GITHUB_WORKSPACE/.devkit/playwright/live.config.mjs"
+
+  live-smoke-skip:
+    uses: ./.github/workflows/live-smoke.yml
+    with:
+      site-url: https://example.test
+      spec-path: live
+      working-directory: fixtures/playwright

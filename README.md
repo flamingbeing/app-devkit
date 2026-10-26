@@ -344,6 +344,48 @@ before the sign-in (a failure stops the run): `test-command` (in `working-direct
 stale; it fetches the builder at `devkit-ref`, default `v1`, so set it to your pin), `node-version` (22) and `dry-run`
 (checks only, no deploy).
 
+### `live-smoke.yml`
+
+Signs the app's test user in on the deployed site and runs the app's own Playwright spec for the signed-in, no-data
+state (the test user is in no app data, so nothing is read or written). Without both secrets the run says so and **skips**;
+the credentials only travel in the environment and are never printed. Call it by hand and after Deploy:
+
+```yaml
+name: Live smoke
+on:
+  workflow_dispatch:
+  workflow_run: { workflows: [Deploy], types: [completed], branches: [main] }
+permissions:
+  contents: read
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    uses: flamingbeing/app-devkit/.github/workflows/live-smoke.yml@v1
+    with:
+      site-url: https://myapp.example.com
+      spec-path: e2e/live                       # a spec file or folder, relative to working-directory
+      firebase-config-file: app/config.js       # optional: has apiKey; checks the sign-in through the API first
+      checkout-ref: ${{ github.event.workflow_run.head_sha }}   # empty on a manual run
+    secrets:
+      test-email: ${{ secrets.MYAPP_TEST_EMAIL }}
+      test-password: ${{ secrets.MYAPP_TEST_PASSWORD }}
+```
+
+Other inputs: `firebase-api-key` (instead of the config file), `playwright-version` (`1.56.1`, match the lockfile),
+`node-version` (22), `working-directory` (`.`). The spec gets `baseURL` = `site-url` and the environment variables
+`LIVE_URL`, `LIVE_TEST_EMAIL`, `LIVE_TEST_PASSWORD`. In the spec, `playwright/live.mjs` gives `liveUser()` and
+`watchConsole(page, { ignore })` (collects page and console errors, ignoring Firestore refusing a no-data user) and, for an app with no email + password form, `signInViaApi(page, { apiKey, email, password })` (signs in through the REST API and stores the user where the Firebase SDK looks for it; `page.goto('/')` first, `page.reload()` after):
+
+```js
+import { test, expect } from '@playwright/test';
+import { liveUser, watchConsole } from '../.devkit/playwright/live.mjs';
+const { email, password } = liveUser();
+test.skip(!email || !password, 'no test user');
+test('signs in', async ({ page }) => { const errors = watchConsole(page); /* sign in through the app's own UI */ expect(errors).toEqual([]); });
+```
+
+Run by hand: `LIVE_URL=https://… LIVE_SPEC=e2e/live LIVE_TEST_EMAIL=… LIVE_TEST_PASSWORD=… npx playwright test -c .devkit/playwright/live.config.mjs`.
+
 ## Speed recipe the blocks follow
 
 No `--with-deps`; `ubuntu-24.04`; caches for the browser and emulator downloads; `concurrency` and `timeout-minutes`
