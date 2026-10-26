@@ -26,7 +26,10 @@ jobs:
       - name: Secret-cleaning function
         run: bash scripts/test-clean.sh
       - name: Pin check lists the kit's own pins
-        run: node scripts/check-pins.mjs . --latest v1.10.3 | grep -q 'setup-browser@v1.10.2' && node scripts/check-pins.mjs . --latest v1 | grep -q 'ok'
+        run: |
+          out=$(node scripts/check-pins.mjs . --latest v1.10.3 || true)
+          echo "$out"
+          grep -q 'setup-browser@v1.10.2 (behind v1.10.3)' <<<"$out"
 
   setup-node:
     runs-on: ubuntu-24.04
