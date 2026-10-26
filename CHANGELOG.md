@@ -3,6 +3,12 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.10.3
+
+- `live-smoke.yml` uses `setup-browser@v1.10.2` (and `setup-node@v1.10.2`): `setup-browser` copies `playwright/` from its
+  own tag, so 1.10.2's workflow still ran 1.10.0's `signInViaApi` (no Referer) in the spec. Use `live-smoke.yml@v1.10.3`
+  or `@v1`. When `playwright/live.mjs` changes, the next release must bump these pins.
+
 ## 1.10.2
 
 - `live-smoke.yml`'s API sign-in check and `signInViaApi` send the site as `Referer` (`<origin>/` of `site-url` / the

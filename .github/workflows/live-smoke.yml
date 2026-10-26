@@ -88,12 +88,12 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         with:
           ref: ${{ inputs.checkout-ref }}
-      - uses: flamingbeing/app-devkit/setup-node@v1.10.0
+      - uses: flamingbeing/app-devkit/setup-node@v1.10.2
         if: steps.secrets.outputs.ready == 'true'
         with:
           node-version: ${{ inputs.node-version }}
           working-directory: ${{ inputs.working-directory }}
-      - uses: flamingbeing/app-devkit/setup-browser@v1.10.0
+      - uses: flamingbeing/app-devkit/setup-browser@v1.10.2
         if: steps.secrets.outputs.ready == 'true'
         with:
           playwright-version: ${{ inputs.playwright-version }}
