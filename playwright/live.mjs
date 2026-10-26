@@ -26,10 +26,13 @@ export function watchConsole(page, { ignore = [] } = {}) {
 // result where the Firebase JS SDK keeps a signed-in user (IndexedDB, `firebase:authUser:<apiKey>:<appName>`), so the
 // app starts signed in. Go to a page of the site first (`await page.goto('/')`), call this, then `page.reload()`.
 // apiKey is the web config's public key; the password only goes to Google's sign-in endpoint and is never logged.
-export async function signInViaApi(page, { apiKey, email, password, appName = '[DEFAULT]', authDomain = '' }) {
+// The call sends the site as its Referer (default: the open page's origin), as the browser would, so a web key
+// restricted to the site's referrers accepts it (with no Referer Google answers "Requests from referer <empty>").
+export async function signInViaApi(page, { apiKey, email, password, appName = '[DEFAULT]', authDomain = '', referer = '' }) {
+  const ref = referer || siteReferer(page.url()) || siteReferer(process.env.LIVE_URL || '');
   const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...(ref ? { referer: ref } : {}) },
     body: JSON.stringify({ email, password, returnSecureToken: true }),
   });
   const j = await res.json().catch(() => ({}));
@@ -53,4 +56,9 @@ export async function signInViaApi(page, { apiKey, email, password, appName = '[
     };
   }), { key: `firebase:authUser:${apiKey}:${appName}`, value: user });
   return { uid: j.localId, email: j.email };
+}
+
+// `https://site.example/any/path` -> `https://site.example/`; '' for about:blank and anything not http(s).
+export function siteReferer(url) {
+  try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? `${u.origin}/` : ''; } catch { return ''; }
 }

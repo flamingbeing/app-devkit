@@ -3,6 +3,13 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.10.2
+
+- `live-smoke.yml`'s API sign-in check and `signInViaApi` send the site as `Referer` (`<origin>/` of `site-url` / the
+  open page; `signInViaApi` takes `referer` to override). A Firebase web key restricted to the site's HTTP referrers
+  refused both with "Requests from referer <empty> are blocked", so the smoke test failed on every run for such apps.
+  New export `siteReferer(url)`. Use `live-smoke.yml@v1.10.2` or `@v1`.
+
 ## 1.10.1
 
 - `live-smoke.yml` uses `setup-browser@v1.10.0` (and `setup-node@v1.10.0`): 1.10.0 pinned `v1.9.2`, whose browser block

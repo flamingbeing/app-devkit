@@ -111,9 +111,11 @@ jobs:
             if (!m) { console.log('::error::no apiKey found in ' + process.env.CONFIG_FILE); process.exit(1); }
             key = m[1];
           }
+          // the site as Referer, as a browser sends it: a web key restricted to the site's referrers refuses no Referer
+          const referer = new URL(process.env.LIVE_URL).origin + '/';
           fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(key), {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: { 'content-type': 'application/json', referer },
             body: JSON.stringify({ email: process.env.LIVE_TEST_EMAIL, password: process.env.LIVE_TEST_PASSWORD, returnSecureToken: false }),
           }).then(async r => {
             const j = await r.json().catch(() => ({}));
