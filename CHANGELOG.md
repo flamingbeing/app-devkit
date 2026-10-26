@@ -3,6 +3,15 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.10.0
+
+- New reusable workflow `live-smoke.yml` plus `playwright/live.mjs` (`liveUser`, `watchConsole`) and
+  `playwright/live.config.mjs`: signs an app's test user in on the deployed site and runs the app's own spec for the
+  signed-in, no-data state. Inputs `site-url`, `spec-path`, optional `firebase-api-key` / `firebase-config-file` (an
+  Identity Toolkit sign-in check first); secrets `test-email`, `test-password`. Skips with a notice when a secret is
+  missing; credentials only travel in the environment and are never printed. CI: helpers on a local page and the skip
+  path.
+
 ## 1.9.2
 
 - `tools/check-links.mjs` and `tools/proofread.mjs`: a link or `src` in a page that is missing next to the page is also

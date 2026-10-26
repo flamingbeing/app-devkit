@@ -1,0 +1,135 @@
+# Reusable: sign the app's test user in on the deployed site and check the signed-in, no-data state. The test user is
+# in no app data, so the run reads and writes nothing. Call it by hand and after Deploy:
+#   name: Live smoke
+#   on:
+#     workflow_dispatch:
+#     workflow_run: { workflows: [Deploy], types: [completed], branches: [main] }
+#   permissions: { contents: read }
+#   jobs:
+#     smoke:
+#       if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+#       uses: flamingbeing/app-devkit/.github/workflows/live-smoke.yml@v1
+#       with:
+#         site-url: https://myapp.example.com
+#         spec-path: e2e/live
+#       secrets:
+#         test-email: ${{ secrets.MYAPP_TEST_EMAIL }}
+#         test-password: ${{ secrets.MYAPP_TEST_PASSWORD }}
+# The spec runs with LIVE_URL (baseURL), LIVE_TEST_EMAIL and LIVE_TEST_PASSWORD (see playwright/live.mjs). Without
+# both secrets the run says so and skips. The credentials only travel in the environment and are never printed.
+name: Live smoke
+
+on:
+  workflow_call:
+    inputs:
+      site-url:
+        description: Deployed site, for example https://myapp.example.com (becomes the spec's baseURL and LIVE_URL).
+        type: string
+        required: true
+      spec-path:
+        description: Spec file or folder of specs, relative to working-directory.
+        type: string
+        required: true
+      firebase-api-key:
+        description: >-
+          Firebase web API key (public). When set, the run first checks the test user can sign in through the Identity
+          Toolkit REST API, so a wrong password fails with a clear message before the browser starts. Empty = no check.
+        type: string
+        default: ''
+      firebase-config-file:
+        description: >-
+          File in the repo (JS or JSON) holding `apiKey`; used when firebase-api-key is empty. Empty = no check.
+        type: string
+        default: ''
+      checkout-ref:
+        description: Ref or SHA to check out. Empty = the caller's ref.
+        type: string
+        default: ''
+      playwright-version:
+        description: Exact Playwright version, matching the project's lockfile.
+        type: string
+        default: '1.56.1'
+      node-version:
+        type: string
+        default: '22'
+      working-directory:
+        description: Folder with package.json and package-lock.json.
+        type: string
+        default: '.'
+    secrets:
+      test-email:
+        required: false
+      test-password:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-smoke-${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      LIVE_URL: ${{ inputs.site-url }}
+      LIVE_SPEC: ${{ inputs.spec-path }}
+      LIVE_TEST_EMAIL: ${{ secrets.test-email }}
+      LIVE_TEST_PASSWORD: ${{ secrets.test-password }}
+    steps:
+      - name: Check secrets
+        id: secrets
+        run: |
+          if [ -n "$LIVE_TEST_EMAIL" ] && [ -n "$LIVE_TEST_PASSWORD" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::The test email / password secrets are not set; skipping the live smoke test."; fi
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          ref: ${{ inputs.checkout-ref }}
+      - uses: flamingbeing/app-devkit/setup-node@v1.9.2
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          node-version: ${{ inputs.node-version }}
+          working-directory: ${{ inputs.working-directory }}
+      - uses: flamingbeing/app-devkit/setup-browser@v1.9.2
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          playwright-version: ${{ inputs.playwright-version }}
+      - name: Test user can sign in (API check)
+        if: steps.secrets.outputs.ready == 'true' && (inputs.firebase-api-key != '' || inputs.firebase-config-file != '')
+        env:
+          API_KEY: ${{ inputs.firebase-api-key }}
+          CONFIG_FILE: ${{ inputs.firebase-config-file }}
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          let key = process.env.API_KEY;
+          if (!key) {
+            const m = fs.readFileSync(process.env.CONFIG_FILE, 'utf8').match(/["']?apiKey["']?\s*:\s*["']([^"']+)["']/);
+            if (!m) { console.log('::error::no apiKey found in ' + process.env.CONFIG_FILE); process.exit(1); }
+            key = m[1];
+          }
+          fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(key), {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ email: process.env.LIVE_TEST_EMAIL, password: process.env.LIVE_TEST_PASSWORD, returnSecureToken: false }),
+          }).then(async r => {
+            const j = await r.json().catch(() => ({}));
+            if (r.ok) { console.log('Test user signs in through the API.'); return; }
+            console.log('::error::API sign-in failed: ' + ((j.error && j.error.message) || r.status));
+            process.exit(1);
+          });
+          JS
+      - name: Sign-in smoke test
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: ${{ inputs.working-directory }}
+        run: npx playwright test -c "$GITHUB_WORKSPACE/.devkit/playwright/live.config.mjs"
+      - uses: actions/upload-artifact@v4
+        if: failure() && steps.secrets.outputs.ready == 'true'
+        with:
+          name: live-smoke-report
+          path: ${{ inputs.working-directory }}/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
