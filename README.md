@@ -374,7 +374,7 @@ jobs:
 Other inputs: `firebase-api-key` (instead of the config file), `playwright-version` (`1.56.1`, match the lockfile),
 `node-version` (22), `working-directory` (`.`). The spec gets `baseURL` = `site-url` and the environment variables
 `LIVE_URL`, `LIVE_TEST_EMAIL`, `LIVE_TEST_PASSWORD`. In the spec, `playwright/live.mjs` gives `liveUser()` and
-`watchConsole(page, { ignore })` (collects page and console errors, ignoring Firestore refusing a no-data user) and, for an app with no email + password form, `signInViaApi(page, { apiKey, email, password })` (signs in through the REST API and stores the user where the Firebase SDK looks for it; `page.goto('/')` first, `page.reload()` after):
+`watchConsole(page, { ignore })` (collects page and console errors, ignoring Firestore refusing a no-data user) and, for an app with no email + password form, `signInViaApi(page, { apiKey, email, password })` (signs in through the REST API with the site as `Referer`, so a web key restricted to the site's referrers accepts it, and stores the user where the Firebase SDK looks for it; `page.goto('/')` first, `page.reload()` after):
 
 ```js
 import { test, expect } from '@playwright/test';
