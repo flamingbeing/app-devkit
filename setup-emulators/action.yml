@@ -3,7 +3,7 @@ description: Java 21, firebase-tools at a pinned version (installed once, cached
 inputs:
   firebase-tools-version:
     description: Exact firebase-tools version (also the cache key).
-    default: '13.29.1'
+    default: '15.33.0'
   emulators:
     description: >-
       Emulators whose jars to fetch up front, comma separated. Only firestore, database, pubsub, storage and ui have

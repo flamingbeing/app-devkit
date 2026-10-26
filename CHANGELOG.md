@@ -3,6 +3,12 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.11.0
+
+- `emulatorServer` and `setup-emulators` default to firebase-tools 15.33.0 (was 13.29.1, which drops document changes
+  during a Listen resume). Pass `firebaseTools` / `firebase-tools-version` to keep another version. New
+  `scripts/check-pins.mjs` lists a repo's devkit pins against the latest tag.
+
 ## 1.10.3
 
 - `live-smoke.yml` uses `setup-browser@v1.10.2` (and `setup-node@v1.10.2`): `setup-browser` copies `playwright/` from its

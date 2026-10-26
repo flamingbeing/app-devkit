@@ -25,6 +25,8 @@ jobs:
           ./actionlint -color
       - name: Secret-cleaning function
         run: bash scripts/test-clean.sh
+      - name: Pin check lists the kit's own pins
+        run: node scripts/check-pins.mjs . --latest v1.10.3 | grep -q 'setup-browser@v1.10.2' && node scripts/check-pins.mjs . --latest v1 | grep -q 'ok'
 
   setup-node:
     runs-on: ubuntu-24.04
@@ -186,15 +188,15 @@ jobs:
       - name: Java, firebase and the Firestore emulator are installed
         run: |
           java -version 2>&1 | grep -q '"21'
-          firebase --version | grep -qx '13.29.1'
+          firebase --version | grep -qx '15.33.0'
           ls ~/.cache/firebase/emulators/cloud-firestore-emulator-*.jar
       - name: npx finds the same firebase-tools without downloading
         # npm's http log shows every request: a download is a .tgz fetch (metadata checks are fine). This replaces a
         # timing check that runner speed pushed across its limit.
         run: |
-          npx --prefer-offline --yes --loglevel=http firebase-tools@13.29.1 --version > npx.log 2>&1
+          npx --prefer-offline --yes --loglevel=http firebase-tools@15.33.0 --version > npx.log 2>&1
           cat npx.log
-          grep -qx '13.29.1' npx.log
+          grep -qx '15.33.0' npx.log
           if grep -q '\.tgz' npx.log; then echo "npx downloaded the package"; exit 1; fi
 
   deploy-worker-dry-run:
