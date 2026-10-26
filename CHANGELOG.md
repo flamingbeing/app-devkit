@@ -3,6 +3,12 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.10.1
+
+- `live-smoke.yml` uses `setup-browser@v1.10.0` (and `setup-node@v1.10.0`): 1.10.0 pinned `v1.9.2`, whose browser block
+  does not copy `playwright/live.config.mjs`, so the test step could not find its config. Use `live-smoke.yml@v1.10.1`
+  or `@v1`; `v1.10.0` of this workflow does not work.
+
 ## 1.10.0
 
 - New reusable workflow `live-smoke.yml` plus `playwright/live.mjs` (`liveUser`, `watchConsole`, `signInViaApi`) and
