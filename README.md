@@ -44,7 +44,7 @@ Java 21, a pinned firebase-tools, and the emulator jars cached and fetched up fr
 ```yaml
 - uses: flamingbeing/app-devkit/setup-emulators@v1
   with:
-    firebase-tools-version: '13.29.1'   # default; also the cache key
+    firebase-tools-version: '15.33.0'   # default; also the cache key
     emulators: firestore                # comma list; only emulators with a jar to download are fetched
     java-version: '21'
 ```
@@ -395,3 +395,9 @@ on every job. Run independent checks as parallel jobs.
 
 Bump `version` in `package.json`, add a CHANGELOG entry, merge with CI green. `release.yml` then tags `vX.Y.Z` (an
 existing tag is never moved) and points `vX` at the newest release of that major.
+
+## Checking a repo's pins
+
+`node scripts/check-pins.mjs [repo-dir] [--latest vX.Y.Z]` lists every `flamingbeing/app-devkit/...@ref` in the repo's
+`.github/` against the latest release tag (read with `git ls-remote` unless `--latest` is given); exit 1 when one is
+behind. `@v1` always counts as current.

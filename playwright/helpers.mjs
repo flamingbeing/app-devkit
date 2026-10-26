@@ -24,7 +24,7 @@ const hosts = () => ({
 
 // Playwright `webServer` entry that starts the emulators and reuses a running set. `url` is the first emulator's address.
 //   webServer: emulatorServer({ project: 'demo-app', only: 'firestore,auth', cwd: 'app', url: 'http://127.0.0.1:9099' })
-export function emulatorServer({ project, only = 'firestore,auth', cwd = '.', url = `http://${hosts().auth}`, firebaseTools = '13.29.1' } = {}) {
+export function emulatorServer({ project, only = 'firestore,auth', cwd = '.', url = `http://${hosts().auth}`, firebaseTools = '15.33.0' } = {}) {
   if (!project) throw new Error('emulatorServer needs a project id (use a demo- one)');
   if (!project.startsWith('demo-')) throw new Error(`'${project}' is not a demo- project: tests must never touch a live project`);
   return {
