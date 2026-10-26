@@ -33,7 +33,9 @@ case $PW in ''|undefined|*[^0-9.]*) echo "pw-box: @playwright/test must be pinne
 IMAGE=localhost/pw-box:$PW-fbt$FIREBASE_TOOLS
 if ! podman image exists "$IMAGE"; then
   echo "pw-box: building $IMAGE"
-  CTX=$(mktemp -d "${TMPDIR:-/tmp}/pw-box.XXXXXX")
+  # under the home cache, not /tmp: a job's private /tmp is invisible to podman
+  mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/pw-box"
+  CTX=$(mktemp -d "${XDG_CACHE_HOME:-$HOME/.cache}/pw-box/ctx.XXXXXX")
   cat > "$CTX/Containerfile" <<DOCKER
 FROM mcr.microsoft.com/playwright:v$PW-noble
 RUN apt-get update && apt-get install -y --no-install-recommends $JDK_PKG && rm -rf /var/lib/apt/lists/*
