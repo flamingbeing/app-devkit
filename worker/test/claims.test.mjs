@@ -104,6 +104,23 @@ test('/api/claims: no longer a member -> claims cleared, revoked/{uid} left alon
   assert.deepEqual(o.admin.log, [['set', 'u2', {}]]);
 });
 
+test('/api/claims: an older ask finishing its write last does not leave older claims', async () => {
+  const role = { g: { _: 'member' }, v: 1 };
+  let stored, calls = 0, release;
+  const gate = new Promise((r) => { release = r; });
+  const admin = { project: P, clearRevoked: async () => {},
+    setClaims: async (uid, c) => { const mine = ++calls; if (mine === 1) await gate; stored = c; if (mine === 2) release(); } };
+  let loads = 0;
+  // ask A reads the doc before the role exists, ask B after; A's write is held back until B's is in
+  const loadClaims = async () => (++loads === 1 ? null : role);
+  const tok = `Bearer ${await k.idToken(good())}`;
+  const [a, b] = await Promise.all([handleClaims(req({ Authorization: tok }), opts({ admin, loadClaims })),
+    (async () => { await new Promise((r) => setTimeout(r, 20)); return handleClaims(req({ Authorization: tok }), opts({ admin, loadClaims })); })()]);
+  assert.equal(a.status, 200); assert.equal(b.status, 200);
+  assert.deepEqual(stored, { m: 'google', g: { _: 'member' }, v: 1 });
+  assert.deepEqual((await a.json()).claims, stored);
+});
+
 test('/api/claims: refusals', async () => {
   const tok = `Bearer ${await k.idToken(good())}`;
   assert.equal((await handleClaims(req({}, 'GET'), opts())).status, 405);
