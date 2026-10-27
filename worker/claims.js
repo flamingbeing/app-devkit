@@ -1,4 +1,4 @@
-// app-devkit worker/claims.js 1.4.0. The `/api/claims` route and admin calls for the rules kit, for a Cloudflare Worker
+// app-devkit worker/claims.js 1.4.1. The `/api/claims` route and admin calls for the rules kit, for a Cloudflare Worker
 // (Web Crypto and fetch, no dependencies).
 //
 // For people with a Firebase account (Google, email link, password): the page sends its ID token; the Worker verifies it
@@ -182,10 +182,22 @@ export async function handleClaims(request, { admin: adm, loadClaims, origin, li
   const provider = token.firebase?.sign_in_provider;
   if (provider === 'custom') return json({ error: 'This sign-in carries its own claims.' }, 409);
   try {
-    const found = await loadClaims({ uid: token.sub, token, admin: adm });
     const m = PROVIDERS[provider];
-    const claims = found ? claimsShape({ ...(m ? { m } : {}), ...found }) : {};
+    const load = async () => {
+      const found = await loadClaims({ uid: token.sub, token, admin: adm });
+      return { found, claims: found ? claimsShape({ ...(m ? { m } : {}), ...found }) : {} };
+    };
+    let { found, claims } = await load();
     await adm.setClaims(token.sub, claims);
+    // Two asks for one account can overlap (a page asks once before its role doc arrives and again when it does); the
+    // older one may finish its write last and leave the claims behind the role doc, and the page asks once per version.
+    // So after writing, read again and write again until what was written is what the role doc says now.
+    for (let i = 0; i < 3; i++) {
+      const again = await load();
+      if (JSON.stringify(again.claims) === JSON.stringify(claims)) break;
+      ({ found, claims } = again);
+      await adm.setClaims(token.sub, claims);
+    }
     if (found) await adm.clearRevoked(token.sub);
     return json({ claims });
   } catch (e) {

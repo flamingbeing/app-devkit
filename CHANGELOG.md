@@ -3,8 +3,13 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
-## Unreleased
+## 1.11.1
 
+- `worker/claims.js` 1.4.1: `/api/claims` reads the role again after writing the claims and writes again if it changed
+  (up to 3 times). Two asks for one account could overlap (a page asks before its role doc arrives and again when it
+  does); the older one finishing its write last left the account without its role, and the page asks only once per
+  version, so it stayed on "no access" (about 1 in 177 sign-ins in an app's browser tests). `claims.js` is copied into
+  apps: copy the new one and bump the pins to `v1.11.1`.
 - `tools/pw-box.sh --docker` (or `PW_BOX_ENGINE=docker`) runs the box with Docker instead of Podman, for a cloud session
   (start `dockerd` first). Behind an HTTPS proxy it uses the host network, passes the proxy and its CA to the box, and
   bakes the Firestore emulator jar into the image. Git dependencies are installed on the host.
