@@ -2,7 +2,10 @@
 # Run a repo's Playwright suite in Chromium, Firefox and WebKit inside a rootless Podman box, with the Firestore
 # emulator. For a host where the browsers' system libraries are not installable (Ubuntu 26.04).
 #
-#   cd <repo> && bash <devkit>/tools/pw-box.sh [-b chromium,firefox,webkit] [-- <playwright test args>]
+#   cd <repo> && bash <devkit>/tools/pw-box.sh [--docker] [-b chromium,firefox,webkit] [-- <playwright test args>]
+#   --docker (or PW_BOX_ENGINE=docker): use docker instead of podman, e.g. in a cloud session after starting dockerd.
+#   Behind an HTTPS proxy (HTTPS_PROXY, CA in PW_BOX_CA or NODE_EXTRA_CA_CERTS) it runs on the host network with the proxy
+#   and CA given to the box; Chromium and WebKit pass that way, Firefox does not trust the CA (the service-worker specs fail).
 #
 # The box is Playwright's own image (matching the repo's pinned @playwright/test) plus a JDK and firebase-tools,
 # built once per versions pair and cached by tag. Each run is a fresh container with its own network namespace, so the
@@ -12,16 +15,28 @@
 set -euo pipefail
 
 BROWSERS=chromium,firefox,webkit
+ENGINE=${PW_BOX_ENGINE:-podman}
+RUNARGS=()
+NETARGS=()   # docker mode on a proxied host (a cloud session): the build uses the host network (the proxy is on 127.0.0.1) and its CA; the emulator jar is baked into the image
 JDK_PKG=${PW_BOX_JDK:-openjdk-21-jre-headless}
 FIREBASE_TOOLS=${PW_BOX_FIREBASE_TOOLS:-15.33.0}
 while [ $# -gt 0 ]; do
   case $1 in
     -b|--browsers) BROWSERS=$2; shift 2 ;;
+    --docker) ENGINE=docker; shift ;;
     --) shift; break ;;
-    -h|--help) sed -n 2,13p "$0"; exit 0 ;;
+    -h|--help) sed -n 2,17p "$0"; exit 0 ;;
     *) break ;;
   esac
 done
+
+CA=${PW_BOX_CA:-${NODE_EXTRA_CA_CERTS:-}}
+if [ "$ENGINE" = docker ] && [ -n "${HTTPS_PROXY:-}" ]; then
+  NETARGS=(--network host)   # the proxy listens on 127.0.0.1
+  for v in HTTPS_PROXY HTTP_PROXY NO_PROXY https_proxy http_proxy no_proxy; do [ -n "${!v:-}" ] && RUNARGS+=(-e "$v=${!v}"); done
+  # the service worker loads core.anawj.com live (importScripts is not routed), so the browsers need the proxy and its CA
+  [ -f "$CA" ] && RUNARGS+=(-e PW_BOX_CA=/pw-box-ca.crt -e NODE_EXTRA_CA_CERTS=/pw-box-ca.crt -v "$CA":/pw-box-ca.crt:ro)
+fi
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 REPO=$(pwd)
@@ -31,17 +46,27 @@ PW=$(node -e 'const p=require("./package.json");const v=(p.devDependencies||{})[
 case $PW in ''|undefined|*[^0-9.]*) echo "pw-box: @playwright/test must be pinned to an exact version (got '$PW')" >&2; exit 2 ;; esac
 
 IMAGE=localhost/pw-box:$PW-fbt$FIREBASE_TOOLS
-if ! podman image exists "$IMAGE"; then
+if ! $ENGINE image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "pw-box: building $IMAGE"
   # under the home cache, not /tmp: a job's private /tmp is invisible to podman
   mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/pw-box"
   CTX=$(mktemp -d "${XDG_CACHE_HOME:-$HOME/.cache}/pw-box/ctx.XXXXXX")
+  BUILDARGS=()
+  if [ "${#NETARGS[@]}" -gt 0 ]; then   # the build runs behind the same proxy: host network, CA via a copy in the context
+    BUILDARGS=(--network host --build-arg "HTTPS_PROXY=$HTTPS_PROXY" --build-arg "NO_PROXY=${NO_PROXY:-}")
+    [ -f "$CA" ] && cp "$CA" "$CTX/ca.crt"
+  fi
   cat > "$CTX/Containerfile" <<DOCKER
 FROM mcr.microsoft.com/playwright:v$PW-noble
-RUN apt-get update && apt-get install -y --no-install-recommends $JDK_PKG && rm -rf /var/lib/apt/lists/*
+ARG HTTPS_PROXY
+ARG NO_PROXY
+$([ -f "$CTX/ca.crt" ] && echo 'COPY ca.crt /pw-box-ca.crt
+ENV NODE_EXTRA_CA_CERTS=/pw-box-ca.crt SSL_CERT_FILE=/pw-box-ca.crt')
+RUN apt-get update && apt-get install -y --no-install-recommends $JDK_PKG libnss3-tools && rm -rf /var/lib/apt/lists/*
 RUN npm install -g firebase-tools@$FIREBASE_TOOLS
+RUN firebase setup:emulators:firestore
 DOCKER
-  podman build -t "$IMAGE" "$CTX"
+  $ENGINE build ${BUILDARGS[@]+"${BUILDARGS[@]}"} -f "$CTX/Containerfile" -t "$IMAGE" "$CTX"
   rm -rf "$CTX"
 fi
 
@@ -63,9 +88,17 @@ export default { ...base, projects };
 JS
 trap 'rm -rf "$REPO/.pw-box.config.mjs"' EXIT
 
+# docker mode (a cloud session): the repo's git dependencies (github: ssh URLs) are installed here on the host, which has
+# the git credentials, not in the box
+if [ "$ENGINE" = docker ] && [ ! -d "$REPO/node_modules" ]; then
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ npm ci --no-audit --no-fund
+fi
+
 START=$(date +%s)
-podman run --rm --ipc=host --init \
+$ENGINE run --rm --ipc=host --init ${NETARGS[@]+"${NETARGS[@]}"} ${RUNARGS[@]+"${RUNARGS[@]}"} \
   -v "$REPO":/work:Z -w /work \
   -e CI=1 -e PW_BOX_BROWSERS="$BROWSERS" -e PW_CHROMIUM= \
-  "$IMAGE" bash -c '[ -d node_modules ] || npm ci --no-audit --no-fund; npx playwright test -c .pw-box.config.mjs "$@"' _ "$@"
+  "$IMAGE" bash -c '[ -d node_modules ] || npm ci --no-audit --no-fund
+  if [ -f /pw-box-ca.crt ]; then mkdir -p ~/.pki/nssdb; certutil -N --empty-password -d sql:$HOME/.pki/nssdb 2>/dev/null; awk "/BEGIN CERT/{n++} {print > \"/tmp/pwca\" n \".crt\"}" /pw-box-ca.crt; for c in /tmp/pwca*.crt; do certutil -d sql:$HOME/.pki/nssdb -A -t C,, -n "pw-box-$c" -i "$c"; done; fi
+  npx playwright test -c .pw-box.config.mjs "$@"' _ "$@"
 echo "pw-box: $BROWSERS passed in $(( $(date +%s) - START )) s"

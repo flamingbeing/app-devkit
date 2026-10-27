@@ -3,6 +3,12 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## Unreleased
+
+- `tools/pw-box.sh --docker` (or `PW_BOX_ENGINE=docker`) runs the box with Docker instead of Podman, for a cloud session
+  (start `dockerd` first). Behind an HTTPS proxy it uses the host network, passes the proxy and its CA to the box, and
+  bakes the Firestore emulator jar into the image. Git dependencies are installed on the host.
+
 ## 1.11.0
 
 - `emulatorServer` and `setup-emulators` default to firebase-tools 15.33.0 (was 13.29.1, which drops document changes
