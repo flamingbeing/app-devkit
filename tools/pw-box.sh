@@ -5,7 +5,7 @@
 #   cd <repo> && bash <devkit>/tools/pw-box.sh [--docker] [-b chromium,firefox,webkit] [-- <playwright test args>]
 #   --docker (or PW_BOX_ENGINE=docker): use docker instead of podman, e.g. in a cloud session after starting dockerd.
 #   Behind an HTTPS proxy (HTTPS_PROXY, CA in PW_BOX_CA or NODE_EXTRA_CA_CERTS) it runs on the host network with the proxy
-#   and CA given to the box; Chromium and WebKit pass that way, Firefox does not trust the CA (the service-worker specs fail).
+#   and CA given to the box (Chromium NSS db; Firefox skips certificate errors), so all three browsers pass.
 #
 # The box is Playwright's own image (matching the repo's pinned @playwright/test) plus a JDK and firebase-tools,
 # built once per versions pair and cached by tag. Each run is a fresh container with its own network namespace, so the
@@ -81,7 +81,12 @@ const browsers = (process.env.PW_BOX_BROWSERS || 'chromium,firefox,webkit').spli
 const projects = [];
 for (const b of browsers) for (const p of base.projects || [{ name: 'default', use: {} }]) {
   const use = { ...p.use, browserName: b };
-  if (b === 'firefox') { delete use.isMobile; }
+  if (b === 'firefox') {
+    delete use.isMobile;
+    // behind a proxy CA (a cloud session) Firefox ignores the system store and the policy file; its own NSS db is not reachable
+    // from the wrapper, so skip the certificate check there (the box is throwaway and only the proxy's CA is in play)
+    if (process.env.PW_BOX_CA) use.ignoreHTTPSErrors = true;
+  }
   projects.push({ ...p, name: `${p.name}-${b}`, use });
 }
 export default { ...base, projects };
