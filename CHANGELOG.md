@@ -8,6 +8,8 @@ becomes `v2`.
 - `tools/pw-box.sh --docker` (or `PW_BOX_ENGINE=docker`) runs the box with Docker instead of Podman, for a cloud session
   (start `dockerd` first). Behind an HTTPS proxy it uses the host network, passes the proxy and its CA to the box, and
   bakes the Firestore emulator jar into the image. Git dependencies are installed on the host.
+- `pw-box.sh`: when a proxy CA is given, Firefox skips certificate errors (it ignores the system store), so the service-worker
+  specs pass behind the proxy: Firefox 41/41 in Docker. Nothing changes without a CA.
 
 ## 1.11.0
 
