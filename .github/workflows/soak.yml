@@ -12,7 +12,7 @@
 #       with:
 #         emulators: firestore,auth         # empty for an app with no emulators
 # The first `repeat` runs are normal; the next `slow-repeat` runs use the slow-phone profile (playwright/soak-slow.mjs:
-# CPU 4x slower, slow-3G network, a longer test timeout; SOAK_BLIPS adds short offline blips). No retries: a flake is a
+# CPU 4x slower, fast-3G network, a longer test timeout; SOAK_BLIPS adds short offline blips). No retries: a flake is a
 # bug. Optional `chaos-command` and `model-command` run once each with SOAK_SEED (tonight's date, YYYYMMDD) and
 # SOAK_SEED_N (days since 2020-01-01 times 10, so each night starts a new range of 10 seeds); a non-zero exit is
 # reported with the seed so the failure replays. `unit-command` runs `unit-repeat` times.
@@ -24,7 +24,7 @@ on:
       kit-ref:
         description: Ref of app-devkit to take the soak scripts from (the kit's version tag).
         type: string
-        default: v1.13.1
+        default: v1.13.4
       emulators:
         description: Firebase emulators the browser tests need (comma separated, as setup-emulators). Empty = none.
         type: string
