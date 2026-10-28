@@ -121,6 +121,19 @@ test('/api/claims: an older ask finishing its write last does not leave older cl
   assert.deepEqual((await a.json()).claims, stored);
 });
 
+test('/api/claims: a removal landing during the ask stays revoked (revoked/{uid} is not left cleared)', async () => {
+  const log = [];
+  let member = true;
+  // the doc is read (member) and the claims written; the removal (doc gone, then revoke) lands before clearRevoked
+  const admin = { project: P, setClaims: async (uid, c) => log.push(['set', uid, c]),
+    clearRevoked: async (uid) => { member = false; log.push(['revoke', uid]); log.push(['clear', uid]); },
+    revoke: async (uid) => log.push(['revoke', uid]) };
+  const loadClaims = async () => (member ? { g: { _: 'member' }, v: 1 } : null);
+  const r = await handleClaims(req({ Authorization: `Bearer ${await k.idToken(good())}` }), opts({ admin, loadClaims }));
+  assert.deepEqual(await r.json(), { claims: {} });
+  assert.deepEqual(log.at(-1), ['revoke', 'u1'], 'revoked again after the clear');
+});
+
 test('/api/claims: refusals', async () => {
   const tok = `Bearer ${await k.idToken(good())}`;
   assert.equal((await handleClaims(req({}, 'GET'), opts())).status, 405);
