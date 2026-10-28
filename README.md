@@ -421,11 +421,11 @@ on:
 permissions: { contents: read, issues: write }
 jobs:
   soak:
-    uses: flamingbeing/app-devkit/.github/workflows/soak.yml@v1.13.0
+    uses: flamingbeing/app-devkit/.github/workflows/soak.yml@v1.13.1
     with: { emulators: 'firestore,auth' }   # empty for an app with no emulators
 ```
 
-Inputs: `emulators`, `test-command` (`npx playwright test`), `repeat` (20), `slow-repeat` (10), `blips` (false: short
+Inputs: `emulators`, `test-command` (`npx playwright test`), `repeat` (10), `slow-repeat` (5), `batch` (5: runs per Playwright invocation, so the emulators are emptied between batches), `blips` (false: short
 offline blips in the slow runs; a spec that goes offline on purpose can fight them), `unit-command`, `unit-repeat`
 (100), `chaos-command`, `model-command`, `kit-ref` (the scripts' tag), `playwright-version`, `node-version`.
 

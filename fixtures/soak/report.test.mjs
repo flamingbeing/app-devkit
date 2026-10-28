@@ -31,3 +31,18 @@ test('clean body carries the count the next night reads back', () => {
   assert.equal(cleanCount(body), 3);
   assert.match(body, /3 of 7/);
 });
+
+test('per-batch Playwright files are merged into one row per source', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { collect } = await import('../../tools/soak-report.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'soak-'));
+  writeFileSync(join(dir, 'normal.b1.json'), JSON.stringify(report));
+  writeFileSync(join(dir, 'normal.b2.json'), JSON.stringify(report));
+  const { rows } = collect(dir);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].source, 'normal');
+  assert.equal(rows[0].runs, 6);
+  assert.deepEqual(rows[0].failed, [['a.spec.mjs › adds an item', 4]]);
+});
