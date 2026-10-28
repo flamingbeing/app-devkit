@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { summarisePlaywright, renderBody, cleanCount, hasFailures } from '../../tools/soak-report.mjs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { summarisePlaywright, renderBody, cleanCount, hasFailures, collect } from '../../tools/soak-report.mjs';
 
 const report = {
   suites: [{ file: 'a.spec.mjs', specs: [], suites: [{ specs: [
@@ -45,4 +48,15 @@ test('per-batch Playwright files are merged into one row per source', async () =
   assert.equal(rows[0].source, 'normal');
   assert.equal(rows[0].runs, 6);
   assert.deepEqual(rows[0].failed, [['a.spec.mjs › adds an item', 4]]);
+});
+
+test('a batch whose Playwright run errored out (top-level errors, no suites) is not a clean night', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'soak-'));
+  const ok = { suites: [{ file: 'a.spec.js', specs: [{ title: 't', tests: [{ status: 'expected' }] }] }], errors: [] };
+  const died = { suites: [], errors: [{ message: 'Error: timed out waiting for the auth emulator\n    at setup' }] };
+  writeFileSync(join(dir, 'normal.b1.json'), JSON.stringify(ok));
+  writeFileSync(join(dir, 'normal.b2.json'), JSON.stringify(died));
+  const r = collect(dir);
+  assert.equal(hasFailures(r), true);
+  assert.deepEqual(r.notes, ['normal.b2.json: Error: timed out waiting for the auth emulator']);
 });

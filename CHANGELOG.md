@@ -3,6 +3,16 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.13.3
+
+- `tools/soak-report.mjs`: a batch whose Playwright run died (top-level `errors`: global setup threw, a spec failed to
+  load) counted as a clean night. Its errors are now listed and the night is not clean.
+- `playwright/helpers.mjs` `fsAdmin`: a `Date` was seeded as an empty map and timestamps read back as `undefined`. Dates
+  now go in as `timestampValue` and come back as `Date`; `undefined` fields seed as null.
+- `tools/check-links.mjs`: heading anchors dropped underscores inside words (`claims_shape`), so a correct link failed
+  and a wrong one passed. Only emphasis underscores are dropped now, as on GitHub.
+- `scripts/check-pins.mjs`: a pin on `@main`, a branch or a SHA was not listed or counted; it now counts as stale.
+
 ## 1.13.2
 
 - `worker/claims.js` 1.4.2: a member removed while their page was asking `/api/claims` could keep access for the hour

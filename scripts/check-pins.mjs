@@ -31,7 +31,7 @@ if (!latest) { console.error('no latest tag found'); process.exit(2); }
 let stale = 0;
 for (const f of [...files(join(root, '.github'))]) {
   readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
-    const m = line.match(/flamingbeing\/app-devkit(\/[\w./-]+?)?@(v[\w.]+)/);
+    const m = line.match(/flamingbeing\/app-devkit(\/[\w./-]+?)?@([\w.-]+)/);
     if (!m) return;
     const ok = m[2] === latest || m[2] === latest.split('.')[0];
     const note = ok ? 'ok' : m[2].startsWith(latest.split('.')[0] + '.') ? `behind ${latest}` : `different major (latest ${latest})`;

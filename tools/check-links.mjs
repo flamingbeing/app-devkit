@@ -15,7 +15,7 @@ const files = [];
   }
 })(root);
 
-const slug = t => t.toLowerCase().replace(/<[^>]+>|[`*_]/g, '').trim().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s/g, '-');
+const slug = t => t.toLowerCase().replace(/<[^>]+>|[`*]|(^|\s)_+|_+(?=\s|$)/g, '$1').trim().replace(/[^\p{L}\p{N}_\s-]/gu, '').replace(/\s/g, '-');
 const anchors = new Map();
 const anchorsOf = f => {
   if (!anchors.has(f)) {
