@@ -78,7 +78,16 @@ export function fsAdmin(project) {
   return {
     async put(path, o) { await ok(await fetch(`${root}/documents/${path}`, { method: 'PATCH', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ fields: fields(o) }) }), `seed ${path}`); },
     async get(path) { const r = await fetch(`${root}/documents/${path}`, { headers }); return r.ok ? unfields((await r.json()).fields || {}) : null; },
-    async list(path) { const r = await fetch(`${root}/documents/${path}?pageSize=300`, { headers }); const j = r.ok ? await r.json() : {}; return (j.documents || []).map(d => unfields(d.fields || {})); },
+    // (every page: a shared collection that grows over a long soak outgrows one page, and the newest documents would go missing)
+    async list(path) {
+      const out = [];
+      for (let token = ''; ;) {
+        const r = await fetch(`${root}/documents/${path}?pageSize=300${token ? `&pageToken=${encodeURIComponent(token)}` : ''}`, { headers });
+        const j = r.ok ? await r.json() : {};
+        out.push(...(j.documents || []).map(d => unfields(d.fields || {})));
+        if (!(token = j.nextPageToken || '')) return out;
+      }
+    },
     async del(path) { await ok(await fetch(`${root}/documents/${path}`, { method: 'DELETE', headers }), `delete ${path}`); },
     // wipe everything in the emulator (between suites; per-test data should use its own ids instead)
     async clear() { await ok(await fetch(`${root}/documents`, { method: 'DELETE', headers }), 'clear'); },
