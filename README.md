@@ -405,6 +405,30 @@ test('signs in', async ({ page }) => { const errors = watchConsole(page); /* sig
 
 Run by hand: `LIVE_URL=https://… LIVE_SPEC=e2e/live LIVE_TEST_EMAIL=… LIVE_TEST_PASSWORD=… npx playwright test -c .devkit/playwright/live.config.mjs`.
 
+### `soak.yml`
+
+The nightly soak: the browser tests many times (default 20 normal runs plus 10 under a slow-phone profile: CPU 4x, slow
+3G, 180 s test timeout; no retries), optionally `unit-command` x100 and `chaos-command` / `model-command` with tonight's
+`SOAK_SEED` (date) and `SOAK_SEED_N` (a new range of 10 seeds per night). Failures go to ONE open issue titled
+`Nightly soak` per repo, rewritten in place (failing test, count, run link) and closed after 7 clean nights. Plain
+Actions, no model, never a required check. The caller needs `permissions: { contents: read, issues: write }`:
+
+```yaml
+name: Nightly soak
+on:
+  schedule: [{ cron: '30 18 * * *' }]   # 02:30 SGT
+  workflow_dispatch:
+permissions: { contents: read, issues: write }
+jobs:
+  soak:
+    uses: flamingbeing/app-devkit/.github/workflows/soak.yml@v1.13.0
+    with: { emulators: 'firestore,auth' }   # empty for an app with no emulators
+```
+
+Inputs: `emulators`, `test-command` (`npx playwright test`), `repeat` (20), `slow-repeat` (10), `blips` (false: short
+offline blips in the slow runs; a spec that goes offline on purpose can fight them), `unit-command`, `unit-repeat`
+(100), `chaos-command`, `model-command`, `kit-ref` (the scripts' tag), `playwright-version`, `node-version`.
+
 ## Speed recipe the blocks follow
 
 No `--with-deps`; `ubuntu-24.04`; caches for the browser and emulator downloads; `concurrency` and `timeout-minutes`
