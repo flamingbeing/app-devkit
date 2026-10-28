@@ -3,6 +3,15 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.13.0
+
+- New reusable workflow `soak.yml` (the nightly soak): the app's browser tests `repeat` times (default 20) plus `slow-repeat`
+  (10) under a slow-phone profile (`playwright/soak-slow.mjs`: CPU 4x, slow 3G, longer timeout; offline blips with
+  `blips: true`), no retries. Optional `unit-command` (x100), `chaos-command` and `model-command` run with tonight's
+  `SOAK_SEED` / `SOAK_SEED_N`. `tools/soak-report.mjs` keeps ONE open issue titled "Nightly soak" per repo (opened or
+  rewritten on failure with the failing tests, counts and run link; closed after 7 clean nights). Plain Actions, no model;
+  not a required check. Callers need `permissions: issues: write`. Nothing existing changes.
+
 ## 1.12.0
 
 - New block `changed-files`: `id: changes` then `if: steps.changes.outputs.app == 'true'` on a heavy job's steps. On a pull

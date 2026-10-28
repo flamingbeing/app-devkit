@@ -1,0 +1,168 @@
+# Reusable: the nightly soak. Runs the app's browser tests many times to catch flakes that a single PR run misses, and
+# keeps ONE open issue titled "Nightly soak" in the repo (opened or rewritten on failure, closed after 7 clean nights).
+# Plain Actions, no model. Never a required check; it blocks nothing. Call it from a schedule:
+#   name: Nightly soak
+#   on:
+#     schedule: [{ cron: '30 18 * * *' }]   # 02:30 SGT
+#     workflow_dispatch:
+#   permissions: { contents: read, issues: write }
+#   jobs:
+#     soak:
+#       uses: flamingbeing/app-devkit/.github/workflows/soak.yml@v1
+#       with:
+#         emulators: firestore,auth         # empty for an app with no emulators
+# The first `repeat` runs are normal; the next `slow-repeat` runs use the slow-phone profile (playwright/soak-slow.mjs:
+# CPU 4x slower, slow-3G network, a longer test timeout; SOAK_BLIPS adds short offline blips). No retries: a flake is a
+# bug. Optional `chaos-command` and `model-command` run once each with SOAK_SEED (tonight's date, YYYYMMDD) and
+# SOAK_SEED_N (days since 2020-01-01 times 10, so each night starts a new range of 10 seeds); a non-zero exit is
+# reported with the seed so the failure replays. `unit-command` runs `unit-repeat` times.
+name: Nightly soak
+
+on:
+  workflow_call:
+    inputs:
+      kit-ref:
+        description: Ref of app-devkit to take the soak scripts from (the kit's version tag).
+        type: string
+        default: v1.13.0
+      emulators:
+        description: Firebase emulators the browser tests need (comma separated, as setup-emulators). Empty = none.
+        type: string
+        default: ''
+      firebase-tools-version:
+        type: string
+        default: '15.33.0'
+      playwright-version:
+        description: Exact Playwright version, matching the project's lockfile.
+        type: string
+        default: '1.56.1'
+      node-version:
+        type: string
+        default: '22'
+      test-command:
+        description: The browser test command; the soak adds --repeat-each, --retries=0 and the JSON reporter.
+        type: string
+        default: npx playwright test
+      repeat:
+        description: Normal runs of the whole browser suite.
+        type: number
+        default: 20
+      slow-repeat:
+        description: Runs under the slow-phone profile (about a third of the total).
+        type: number
+        default: 10
+      blips:
+        description: Add short offline blips to the slow-phone runs (a spec that goes offline on purpose can fight them).
+        type: boolean
+        default: false
+      unit-command:
+        type: string
+        default: ''
+      unit-repeat:
+        type: number
+        default: 100
+      chaos-command:
+        description: Optional. Runs once with SOAK_SEED and SOAK_SEED_N set (see the header).
+        type: string
+        default: ''
+      model-command:
+        description: Optional. Runs once with SOAK_SEED_N set; the model seed range is new each night.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: soak-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  soak:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CI: 'true'
+      SOAK_DIR: ${{ github.workspace }}/soak-results
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: flamingbeing/app-devkit
+          ref: ${{ inputs.kit-ref }}
+          path: .soak-kit
+      - uses: flamingbeing/app-devkit/setup-node@v1.12.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - uses: flamingbeing/app-devkit/setup-browser@v1.12.0
+        with:
+          playwright-version: ${{ inputs.playwright-version }}
+      - if: inputs.emulators != ''
+        uses: flamingbeing/app-devkit/setup-emulators@v1.12.0
+        with:
+          firebase-tools-version: ${{ inputs.firebase-tools-version }}
+          emulators: ${{ inputs.emulators }}
+      - name: Results folder and tonight's seeds
+        run: |
+          mkdir -p "$SOAK_DIR"
+          day=$(date -u +%Y%m%d)
+          n=$(( $(date -u +%s) / 86400 - 18262 ))   # days since 2020-01-01
+          echo "SOAK_SEED=$day" >> "$GITHUB_ENV"
+          echo "SOAK_SEED_N=$(( n * 10 ))" >> "$GITHUB_ENV"
+      - name: Browser tests, normal (${{ inputs.repeat }} runs)
+        if: inputs.repeat > 0
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/soak-results/normal.json
+          TEST_CMD: ${{ inputs.test-command }}
+          REPEAT: ${{ inputs.repeat }}
+        run: $TEST_CMD --repeat-each="$REPEAT" --retries=0 --reporter=list,json
+      - name: Browser tests, slow phone (${{ inputs.slow-repeat }} runs)
+        if: inputs.slow-repeat > 0
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/soak-results/slow-phone.json
+          NODE_OPTIONS: --import ${{ github.workspace }}/.soak-kit/playwright/soak-slow.mjs
+          SOAK_SLOW: '1'
+          SOAK_BLIPS: ${{ inputs.blips && '1' || '0' }}
+          TEST_CMD: ${{ inputs.test-command }}
+          REPEAT: ${{ inputs.slow-repeat }}
+        run: $TEST_CMD --repeat-each="$REPEAT" --retries=0 --timeout=180000 --reporter=list,json
+      - name: Unit tests, repeated
+        if: inputs.unit-command != ''
+        env:
+          UNIT_CMD: ${{ inputs.unit-command }}
+          REPEAT: ${{ inputs.unit-repeat }}
+        run: |
+          bad=0
+          for i in $(seq 1 "$REPEAT"); do
+            $UNIT_CMD >"$RUNNER_TEMP/unit.log" 2>&1 || { bad=$((bad+1)); cp "$RUNNER_TEMP/unit.log" "$SOAK_DIR/unit-failure.log"; }
+          done
+          [ "$bad" = 0 ] || echo "unit tests failed in $bad of $REPEAT runs (last failure log in the soak-results artifact)" >> "$SOAK_DIR/unit.fail.txt"
+      - name: Chaos spec (tonight's seed)
+        if: inputs.chaos-command != ''
+        env:
+          CHAOS_CMD: ${{ inputs.chaos-command }}
+        run: |
+          $CHAOS_CMD >"$SOAK_DIR/chaos.log" 2>&1 || echo "chaos failed: replay with SOAK_SEED=$SOAK_SEED SOAK_SEED_N=$SOAK_SEED_N" >> "$SOAK_DIR/chaos.fail.txt"
+      - name: Model seeds (tonight's range)
+        if: inputs.model-command != ''
+        env:
+          MODEL_CMD: ${{ inputs.model-command }}
+        run: |
+          $MODEL_CMD >"$SOAK_DIR/model.log" 2>&1 || echo "model failed: replay with SOAK_SEED_N=$SOAK_SEED_N (a range of 10 seeds starting there)" >> "$SOAK_DIR/model.fail.txt"
+      - name: Update the Nightly soak issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .soak-kit/tools/soak-report.mjs "$SOAK_DIR"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: soak-results
+          path: |
+            soak-results
+            test-results
+          retention-days: 7
+          if-no-files-found: ignore
