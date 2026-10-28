@@ -41,7 +41,8 @@ job after checkout, never as a trigger-level `paths` filter.
 ```
 
 `ignore` (default `*.md`, `docs/*`, `LICENSE`) and `keep` (default `app/*`, `e2e/*`, `fixtures/*`, checked first) are
-newline-separated shell patterns.
+newline-separated shell patterns (whitespace is trimmed). Markdown outside `keep` counts as docs: list any folder whose
+Markdown the app serves or the tests read.
 
 ### `setup-browser`
 

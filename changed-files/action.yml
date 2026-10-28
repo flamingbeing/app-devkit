@@ -37,9 +37,12 @@ runs:
         if [ "$EVENT" != pull_request ]; then
           echo "app=true" >> "$GITHUB_OUTPUT"; echo "$EVENT: run everything"; exit 0
         fi
-        # checkout is the PR's merge commit at depth 1; its first parent is the base, so one more level gives the diff
-        if ! git fetch --no-tags --depth=2 origin "$GITHUB_SHA" >/dev/null 2>&1 \
+        # checkout must be the PR's merge commit (the default); its first parent is the base, so one more level gives the diff
+        if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ] || ! git fetch --no-tags --depth=2 origin "$GITHUB_SHA" >/dev/null 2>&1 \
+           || [ "$(git rev-list --parents -n1 HEAD | wc -w)" != 3 ] \
            || ! files=$(git diff --no-renames --name-only HEAD^1 HEAD 2>/dev/null); then
-          echo "app=true" >> "$GITHUB_OUTPUT"; echo "could not read the diff: run everything"; exit 0
+          echo "app=true" >> "$GITHUB_OUTPUT"; echo "not a readable merge-commit diff: run everything"; exit 0
         fi
-        printf '%s\n' "$files" | bash "$GITHUB_ACTION_PATH/decide.sh" | tee -a "$GITHUB_OUTPUT" | sed 's/^/changed-files: /'
+        res=$(printf '%s\n' "$files" | bash "$GITHUB_ACTION_PATH/decide.sh" 2>/dev/null || true)
+        [ "$res" = app=false ] || res=app=true
+        echo "$res" >> "$GITHUB_OUTPUT"; echo "changed-files: $res"
