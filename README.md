@@ -421,7 +421,7 @@ on:
 permissions: { contents: read, issues: write }
 jobs:
   soak:
-    uses: flamingbeing/app-devkit/.github/workflows/soak.yml@v1.13.1
+    uses: flamingbeing/app-devkit/.github/workflows/soak.yml@v1.13.4
     with: { emulators: 'firestore,auth' }   # empty for an app with no emulators
 ```
 

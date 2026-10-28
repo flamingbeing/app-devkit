@@ -3,6 +3,13 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.13.4
+
+- `playwright/soak-slow.mjs`: the slow-phone network is now "Fast 3G" (200 kB/s, 150 ms) instead of "Slow 3G" (50 kB/s).
+  On Slow 3G the app shell took longer than the specs' 10 s waits, so every test failed on every run (trial: 31 tests,
+  5 of 5 runs each) and the issue showed no real signal. `SOAK_DOWN_KBPS`, `SOAK_UP_KBPS` and `SOAK_LATENCY_MS` override it.
+- `soak.yml`: `kit-ref` defaults to v1.13.4.
+
 ## 1.13.3
 
 - `tools/soak-report.mjs`: a batch whose Playwright run died (top-level `errors`: global setup threw, a spec failed to
