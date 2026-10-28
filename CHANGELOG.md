@@ -3,6 +3,11 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.13.5
+
+- `soak.yml`: a failing `model-command` now lists the failing seeds (and their replay lines) in the issue, not only that it
+  failed; the step has a 50 min limit. `kit-ref` defaults to v1.13.5.
+
 ## 1.13.4
 
 - `playwright/soak-slow.mjs`: the slow-phone network is now "Fast 3G" (200 kB/s, 150 ms) instead of "Slow 3G" (50 kB/s).

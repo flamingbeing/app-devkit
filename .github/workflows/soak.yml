@@ -24,7 +24,7 @@ on:
       kit-ref:
         description: Ref of app-devkit to take the soak scripts from (the kit's version tag).
         type: string
-        default: v1.13.4
+        default: v1.13.5
       emulators:
         description: Firebase emulators the browser tests need (comma separated, as setup-emulators). Empty = none.
         type: string
@@ -159,10 +159,11 @@ jobs:
           $CHAOS_CMD >"$SOAK_DIR/chaos.log" 2>&1 || echo "chaos failed: replay with SOAK_SEED=$SOAK_SEED SOAK_SEED_N=$SOAK_SEED_N" >> "$SOAK_DIR/chaos.fail.txt"
       - name: Model seeds (tonight's range)
         if: inputs.model-command != ''
+        timeout-minutes: 50
         env:
           MODEL_CMD: ${{ inputs.model-command }}
         run: |
-          $MODEL_CMD >"$SOAK_DIR/model.log" 2>&1 || echo "model failed: replay with SOAK_SEED_N=$SOAK_SEED_N (a range of 10 seeds starting there)" >> "$SOAK_DIR/model.fail.txt"
+          $MODEL_CMD >"$SOAK_DIR/model.log" 2>&1 || { echo "model failed (SOAK_SEED_N=$SOAK_SEED_N); failing seeds, replay each with MODEL_SEED=<n>:"; grep -hE 'failing seeds|replay:' "$SOAK_DIR/model.log" | head -10; } >> "$SOAK_DIR/model.fail.txt"
       - name: Update the Nightly soak issue
         if: always()
         env:
