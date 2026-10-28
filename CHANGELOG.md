@@ -3,11 +3,16 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
-## 1.13.6
+## 1.13.7
 
 - `soak.yml`: a night that runs only unit, chaos or model steps and passes is clean again. Those steps now write a
   `<step>.ok.txt` line when they pass, and the report counts it (the clean line lists them); before, nothing they
-  wrote was read, so the report said "no results were written" and showed the run red. `kit-ref` defaults to v1.13.6.
+  wrote was read, so the report said "no results were written" and showed the run red. `kit-ref` defaults to v1.13.7.
+
+## 1.13.6
+
+- `fsAdmin(...).list` follows `nextPageToken`: a collection over one page (300) came back without its newest documents, so
+  long `--repeat-each` soaks on a shared list failed `serverHas`-style checks late in the run. `soak.yml`'s `kit-ref` defaults to v1.13.6.
 
 ## 1.13.5
 

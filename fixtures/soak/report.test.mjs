@@ -61,7 +61,7 @@ test('a batch whose Playwright run errored out (top-level errors, no suites) is 
   assert.deepEqual(r.notes, ['normal.b2.json: Error: timed out waiting for the auth emulator']);
 });
 
-test('a night of only unit and model steps that passed is clean, not "no results" (1.13.6)', () => {
+test('a night of only unit and model steps that passed is clean, not "no results" (1.13.7)', () => {
   const dir = mkdtempSync(join(tmpdir(), 'soak-'));
   writeFileSync(join(dir, 'model.log'), 'model seeds 24920000 .. 24929999: ok\n');
   writeFileSync(join(dir, 'unit.ok.txt'), 'unit: 50 of 50 runs passed\n');

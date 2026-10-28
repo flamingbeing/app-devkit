@@ -45,3 +45,18 @@ test('fsAdmin seeds a Date as a Firestore timestamp and reads it back as a Date'
     assert.deepEqual(await db.get('revoked/u1'), { at, gone: null });
   } finally { globalThis.fetch = real; }
 });
+
+test('fsAdmin list follows nextPageToken: a collection over one page comes back whole', async () => {
+  const doc = n => ({ name: `x/d${n}`, fields: { n: { integerValue: String(n) } } });
+  const urls = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = async url => {
+    urls.push(String(url));
+    const second = String(url).includes('pageToken=t1');
+    return new Response(JSON.stringify(second ? { documents: [doc(3)] } : { documents: [doc(1), doc(2)], nextPageToken: 't1' }));
+  };
+  try {
+    assert.deepEqual((await fsAdmin('demo-x').list('spaces/_/items')).map(d => d.n), [1, 2, 3]);
+    assert.equal(urls.length, 2);
+  } finally { globalThis.fetch = real; }
+});
