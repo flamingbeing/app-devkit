@@ -24,7 +24,7 @@ on:
       kit-ref:
         description: Ref of app-devkit to take the soak scripts from (the kit's version tag).
         type: string
-        default: v1.13.6
+        default: v1.13.7
       emulators:
         description: Firebase emulators the browser tests need (comma separated, as setup-emulators). Empty = none.
         type: string
@@ -150,20 +150,23 @@ jobs:
           for _ in $(seq 1 "$REPEAT"); do
             $UNIT_CMD >"$RUNNER_TEMP/unit.log" 2>&1 || { bad=$((bad+1)); cp "$RUNNER_TEMP/unit.log" "$SOAK_DIR/unit-failure.log"; }
           done
-          [ "$bad" = 0 ] || echo "unit tests failed in $bad of $REPEAT runs (last failure log in the soak-results artifact)" >> "$SOAK_DIR/unit.fail.txt"
+          if [ "$bad" = 0 ]; then echo "unit: $REPEAT of $REPEAT runs passed" > "$SOAK_DIR/unit.ok.txt"
+          else echo "unit tests failed in $bad of $REPEAT runs (last failure log in the soak-results artifact)" >> "$SOAK_DIR/unit.fail.txt"; fi
       - name: Chaos spec (tonight's seed)
         if: inputs.chaos-command != ''
         env:
           CHAOS_CMD: ${{ inputs.chaos-command }}
         run: |
-          $CHAOS_CMD >"$SOAK_DIR/chaos.log" 2>&1 || echo "chaos failed: replay with SOAK_SEED=$SOAK_SEED SOAK_SEED_N=$SOAK_SEED_N" >> "$SOAK_DIR/chaos.fail.txt"
+          if $CHAOS_CMD >"$SOAK_DIR/chaos.log" 2>&1; then echo "chaos: seed $SOAK_SEED passed" > "$SOAK_DIR/chaos.ok.txt"
+          else echo "chaos failed: replay with SOAK_SEED=$SOAK_SEED SOAK_SEED_N=$SOAK_SEED_N" >> "$SOAK_DIR/chaos.fail.txt"; fi
       - name: Model seeds (tonight's range)
         if: inputs.model-command != ''
         timeout-minutes: 50
         env:
           MODEL_CMD: ${{ inputs.model-command }}
         run: |
-          $MODEL_CMD >"$SOAK_DIR/model.log" 2>&1 || { echo "model failed (SOAK_SEED_N=$SOAK_SEED_N); failing seeds, replay each with MODEL_SEED=<n>:"; grep -hE 'failing seeds|replay:' "$SOAK_DIR/model.log" | head -10; } >> "$SOAK_DIR/model.fail.txt"
+          if $MODEL_CMD >"$SOAK_DIR/model.log" 2>&1; then echo "model: SOAK_SEED_N=$SOAK_SEED_N passed" > "$SOAK_DIR/model.ok.txt"
+          else { echo "model failed (SOAK_SEED_N=$SOAK_SEED_N); failing seeds, replay each with MODEL_SEED=<n>:"; grep -hE 'failing seeds|replay:' "$SOAK_DIR/model.log" | head -10; } >> "$SOAK_DIR/model.fail.txt"; fi
       - name: Update the Nightly soak issue
         if: always()
         env:
