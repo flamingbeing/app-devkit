@@ -28,7 +28,9 @@ export function summarisePlaywright(report) {
     for (const s of suite.suites ?? []) walk(s);
   };
   for (const s of report.suites ?? []) walk(s);
-  return { runs, failed };
+  // top-level errors: the run died (global setup threw, a spec file failed to load), so it is not a clean batch
+  const errors = (report.errors ?? []).map(e => String(e.message ?? e.value ?? 'run errored').split('\n')[0]);
+  return { runs, failed, errors };
 }
 
 export function collect(dir) {
@@ -41,6 +43,7 @@ export function collect(dir) {
     if (f.endsWith('.json')) {
       let s;
       try { s = summarisePlaywright(JSON.parse(text)); } catch { notes.push(`${f}: report unreadable (the run died before it wrote one)`); continue; }
+      notes.push(...s.errors.map(m => `${f}: ${m}`));
       const source = f.replace(/\.json$/, '').replace(/\.b\d+$/, '');   // normal.b1.json, normal.b2.json -> normal
       const row = rows.find(r => r.source === source);
       if (!row) { rows.push({ source, runs: s.runs, failed: [...s.failed] }); continue; }

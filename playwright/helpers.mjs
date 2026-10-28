@@ -61,13 +61,13 @@ export async function createTestUser(project, email, password = 'test-password-1
 }
 
 // Firestore emulator "admin door" (skips the rules): seed and clear documents per test.
-const val = v => v === null ? { nullValue: null } : typeof v === 'string' ? { stringValue: v }
+const val = v => v == null ? { nullValue: null } : v instanceof Date ? { timestampValue: v.toISOString() } : typeof v === 'string' ? { stringValue: v }
   : typeof v === 'number' ? (Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v })
   : typeof v === 'boolean' ? { booleanValue: v } : Array.isArray(v) ? { arrayValue: { values: v.map(val) } }
   : { mapValue: { fields: fields(v) } };
 const fields = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, val(v)]));
 const unval = v => 'stringValue' in v ? v.stringValue : 'booleanValue' in v ? v.booleanValue : 'integerValue' in v ? Number(v.integerValue)
-  : 'doubleValue' in v ? v.doubleValue : 'nullValue' in v ? null : 'arrayValue' in v ? (v.arrayValue.values || []).map(unval)
+  : 'doubleValue' in v ? v.doubleValue : 'timestampValue' in v ? new Date(v.timestampValue) : 'nullValue' in v ? null : 'arrayValue' in v ? (v.arrayValue.values || []).map(unval)
   : 'mapValue' in v ? unfields(v.mapValue.fields || {}) : undefined;
 const unfields = f => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, unval(v)]));
 

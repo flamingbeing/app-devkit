@@ -27,8 +27,8 @@ jobs:
         run: bash scripts/test-clean.sh
       - name: changed-files decides docs-only lists
         run: bash scripts/test-changed-files.sh
-      - name: soak-report turns Playwright JSON into the Nightly soak issue text
-        run: node --test fixtures/soak/report.test.mjs
+      - name: soak-report, check-links, check-pins and fsAdmin unit tests
+        run: node --test fixtures/soak/report.test.mjs fixtures/tools/tools.test.mjs
       - name: Pin check lists the kit's own pins
         run: |
           out=$(node scripts/check-pins.mjs . --latest v1.10.3 || true)
