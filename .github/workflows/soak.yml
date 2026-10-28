@@ -136,7 +136,7 @@ jobs:
           REPEAT: ${{ inputs.unit-repeat }}
         run: |
           bad=0
-          for i in $(seq 1 "$REPEAT"); do
+          for _ in $(seq 1 "$REPEAT"); do
             $UNIT_CMD >"$RUNNER_TEMP/unit.log" 2>&1 || { bad=$((bad+1)); cp "$RUNNER_TEMP/unit.log" "$SOAK_DIR/unit-failure.log"; }
           done
           [ "$bad" = 0 ] || echo "unit tests failed in $bad of $REPEAT runs (last failure log in the soak-results artifact)" >> "$SOAK_DIR/unit.fail.txt"
