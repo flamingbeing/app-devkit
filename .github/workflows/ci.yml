@@ -25,6 +25,8 @@ jobs:
           ./actionlint -color
       - name: Secret-cleaning function
         run: bash scripts/test-clean.sh
+      - name: changed-files decides docs-only lists
+        run: bash scripts/test-changed-files.sh
       - name: Pin check lists the kit's own pins
         run: |
           out=$(node scripts/check-pins.mjs . --latest v1.10.3 || true)
@@ -103,27 +105,36 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: ./setup-node
+      - id: changes
+        uses: ./changed-files
+      - if: steps.changes.outputs.app == 'true'
+        uses: ./setup-node
         with:
           working-directory: fixtures/playwright
-      - uses: ./setup-browser
+      - if: steps.changes.outputs.app == 'true'
+        uses: ./setup-browser
         with:
           playwright-version: 1.56.1
-      - uses: ./setup-emulators
+      - if: steps.changes.outputs.app == 'true'
+        uses: ./setup-emulators
         with:
           emulators: firestore,auth
-      - name: Fixture tests
+      - if: steps.changes.outputs.app == 'true'
+        name: Fixture tests
         working-directory: fixtures/playwright
         run: npx playwright test
-      - name: serve-candidate (plain script, service worker, stale copy, app.js entry, never loaded, SHELL gaps; Playwright 1.56.1)
+      - if: steps.changes.outputs.app == 'true'
+        name: serve-candidate (plain script, service worker, stale copy, app.js entry, never loaded, SHELL gaps; Playwright 1.56.1)
         run: PLAYWRIGHT_PATH="$PWD/fixtures/playwright/node_modules/playwright/index.mjs" node --test fixtures/serve-candidate/serve.test.mjs
-      - uses: ./serve-candidate
+      - if: steps.changes.outputs.app == 'true'
+        uses: ./serve-candidate
         id: candidate
         with:
           origin: https://core.example.test
           sync-dir: fixtures/serve-candidate/candidate
           update-dir: fixtures/serve-candidate/update
-      - name: serve-candidate through the block (its env, then report.mjs on the log)
+      - if: steps.changes.outputs.app == 'true'
+        name: serve-candidate through the block (its env, then report.mjs on the log)
         env:
           PLAYWRIGHT_PATH: ${{ github.workspace }}/fixtures/playwright/node_modules/playwright/index.mjs
           NODE_OPTIONS: ${{ steps.candidate.outputs.node-options }}
