@@ -41,7 +41,13 @@ export function collect(dir) {
     if (f.endsWith('.json')) {
       let s;
       try { s = summarisePlaywright(JSON.parse(text)); } catch { notes.push(`${f}: report unreadable (the run died before it wrote one)`); continue; }
-      rows.push({ source: f.replace(/\.json$/, ''), runs: s.runs, failed: [...s.failed] });
+      const source = f.replace(/\.json$/, '').replace(/\.b\d+$/, '');   // normal.b1.json, normal.b2.json -> normal
+      const row = rows.find(r => r.source === source);
+      if (!row) { rows.push({ source, runs: s.runs, failed: [...s.failed] }); continue; }
+      row.runs += s.runs;
+      const merged = new Map(row.failed);
+      for (const [title, n] of s.failed) merged.set(title, (merged.get(title) ?? 0) + n);
+      row.failed = [...merged];
     } else if (f.endsWith('.fail.txt')) {
       notes.push(...text.split('\n').map(l => l.trim()).filter(Boolean));
     }

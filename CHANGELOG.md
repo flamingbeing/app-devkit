@@ -3,6 +3,14 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.13.1
+
+- `soak.yml`: the browser repeats now run in batches (`batch`, default 5; `tools/soak-batches.sh`), one Playwright
+  invocation each, because the apps' global setup empties the emulators only at the start of an invocation and one
+  20-run invocation made the emulator slow until every sign-in timed out (first trial run: cancelled at the job limit,
+  nothing reported). Defaults are now `repeat` 10 and `slow-repeat` 5 (about an hour per repo); each browser step has a
+  40 min limit and the job 100 min. `soak-report.mjs` merges the per-batch results.
+
 ## 1.13.0
 
 - New reusable workflow `soak.yml` (the nightly soak): the app's browser tests `repeat` times (default 20) plus `slow-repeat`

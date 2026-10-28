@@ -24,7 +24,7 @@ on:
       kit-ref:
         description: Ref of app-devkit to take the soak scripts from (the kit's version tag).
         type: string
-        default: v1.13.0
+        default: v1.13.1
       emulators:
         description: Firebase emulators the browser tests need (comma separated, as setup-emulators). Empty = none.
         type: string
@@ -46,11 +46,17 @@ on:
       repeat:
         description: Normal runs of the whole browser suite.
         type: number
-        default: 20
+        default: 10
       slow-repeat:
         description: Runs under the slow-phone profile (about a third of the total).
         type: number
-        default: 10
+        default: 5
+      batch:
+        description: >-
+          Runs per Playwright invocation. Each invocation empties the emulators first (the apps' global setup), because
+          one long run piles up data and the emulator slows until every sign-in times out.
+        type: number
+        default: 5
       blips:
         description: Add short offline blips to the slow-phone runs (a spec that goes offline on purpose can fight them).
         type: boolean
@@ -81,7 +87,7 @@ concurrency:
 jobs:
   soak:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 100
     env:
       CI: 'true'
       SOAK_DIR: ${{ github.workspace }}/soak-results
@@ -113,22 +119,27 @@ jobs:
       - name: Browser tests, normal (${{ inputs.repeat }} runs)
         if: inputs.repeat > 0
         continue-on-error: true
+        timeout-minutes: 40
         env:
-          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/soak-results/normal.json
           TEST_CMD: ${{ inputs.test-command }}
           REPEAT: ${{ inputs.repeat }}
-        run: $TEST_CMD --repeat-each="$REPEAT" --retries=0 --reporter=list,json
+          BATCH: ${{ inputs.batch }}
+          PREFIX: normal
+        run: bash .soak-kit/tools/soak-batches.sh
       - name: Browser tests, slow phone (${{ inputs.slow-repeat }} runs)
         if: inputs.slow-repeat > 0
         continue-on-error: true
+        timeout-minutes: 40
         env:
-          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/soak-results/slow-phone.json
+          PREFIX: slow-phone
+          EXTRA_ARGS: --timeout=180000
           NODE_OPTIONS: --import ${{ github.workspace }}/.soak-kit/playwright/soak-slow.mjs
           SOAK_SLOW: '1'
           SOAK_BLIPS: ${{ inputs.blips && '1' || '0' }}
           TEST_CMD: ${{ inputs.test-command }}
           REPEAT: ${{ inputs.slow-repeat }}
-        run: $TEST_CMD --repeat-each="$REPEAT" --retries=0 --timeout=180000 --reporter=list,json
+          BATCH: ${{ inputs.batch }}
+        run: bash .soak-kit/tools/soak-batches.sh
       - name: Unit tests, repeated
         if: inputs.unit-command != ''
         env:
