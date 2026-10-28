@@ -3,6 +3,12 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.13.6
+
+- `soak.yml`: a night that runs only unit, chaos or model steps and passes is clean again. Those steps now write a
+  `<step>.ok.txt` line when they pass, and the report counts it (the clean line lists them); before, nothing they
+  wrote was read, so the report said "no results were written" and showed the run red. `kit-ref` defaults to v1.13.6.
+
 ## 1.13.5
 
 - `soak.yml`: a failing `model-command` now lists the failing seeds (and their replay lines) in the issue, not only that it

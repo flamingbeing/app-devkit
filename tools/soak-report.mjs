@@ -1,5 +1,5 @@
-// Nightly soak report (workflow soak.yml). Reads the results folder (Playwright JSON files plus *.fail.txt notes from
-// other steps) and keeps ONE open issue titled "Nightly soak" in the repo, updated in place:
+// Nightly soak report (workflow soak.yml). Reads the results folder (Playwright JSON files, plus *.fail.txt notes and
+// *.ok.txt lines from the other steps: a step that passed says so, or a night of only those would read as no results) and keeps ONE open issue titled "Nightly soak" in the repo, updated in place:
 //   failures tonight -> issue opened or its body rewritten (failing tests with counts, run link), clean nights reset to 0
 //   clean night      -> an open issue counts it; after 7 clean nights in a row the workflow closes the issue
 // Usage: node soak-report.mjs <results-dir>   (GH_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_SERVER_URL; SOAK_DRY=1 prints only)
@@ -36,6 +36,7 @@ export function summarisePlaywright(report) {
 export function collect(dir) {
   const rows = [];   // { source, runs, failed: [[title, n]] }
   const notes = [];
+  const passed = [];   // *.ok.txt lines: unit, chaos and model steps that ran and passed
   let files = [];
   try { files = readdirSync(dir).sort(); } catch { /* setup died before the folder existed */ }
   for (const f of files) {
@@ -53,17 +54,19 @@ export function collect(dir) {
       row.failed = [...merged];
     } else if (f.endsWith('.fail.txt')) {
       notes.push(...text.split('\n').map(l => l.trim()).filter(Boolean));
+    } else if (f.endsWith('.ok.txt')) {
+      passed.push(...text.split('\n').map(l => l.trim()).filter(Boolean));
     }
   }
-  if (!rows.length && !notes.length) notes.push('no results were written (setup or a test step died before reporting)');
-  return { rows, notes };
+  if (!rows.length && !notes.length && !passed.length) notes.push('no results were written (setup or a test step died before reporting)');
+  return { rows, notes, passed };
 }
 
 export function hasFailures({ rows, notes }) {
   return notes.length > 0 || rows.some(r => r.failed.length > 0);
 }
 
-export function renderBody({ rows, notes }, { run, date, clean }) {
+export function renderBody({ rows, notes, passed = [] }, { run, date, clean }) {
   const lines = [`<!-- soak: clean=${clean} -->`, `Last run: ${date}, ${run}`, ''];
   if (hasFailures({ rows, notes })) {
     lines.push('Failing tonight:');
@@ -71,7 +74,7 @@ export function renderBody({ rows, notes }, { run, date, clean }) {
     for (const n of notes) lines.push(`- ${n}`);
     lines.push('', `Clean nights in a row: 0 (the workflow closes this issue after ${CLEAN_TO_CLOSE}).`);
   } else {
-    lines.push(`Clean tonight (${rows.map(r => `${r.source}: ${r.runs} runs`).join(', ') || 'no runs'}).`, '',
+    lines.push(`Clean tonight (${[...rows.map(r => `${r.source}: ${r.runs} runs`), ...passed].join(', ') || 'no runs'}).`, '',
       `Clean nights in a row: ${clean} of ${CLEAN_TO_CLOSE}; the workflow closes this issue at ${CLEAN_TO_CLOSE}.`);
   }
   lines.push('', 'Fix by root cause (no retries, skips or longer timeouts). The weekly soak-fix session reads this issue.');
