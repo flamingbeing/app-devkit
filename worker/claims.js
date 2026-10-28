@@ -1,4 +1,4 @@
-// app-devkit worker/claims.js 1.4.1. The `/api/claims` route and admin calls for the rules kit, for a Cloudflare Worker
+// app-devkit worker/claims.js 1.4.2. The `/api/claims` route and admin calls for the rules kit, for a Cloudflare Worker
 // (Web Crypto and fetch, no dependencies).
 //
 // For people with a Firebase account (Google, email link, password): the page sends its ID token; the Worker verifies it
@@ -198,7 +198,12 @@ export async function handleClaims(request, { admin: adm, loadClaims, origin, li
       ({ found, claims } = again);
       await adm.setClaims(token.sub, claims);
     }
-    if (found) await adm.clearRevoked(token.sub);
+    if (found) {
+      await adm.clearRevoked(token.sub);
+      // a removal (doc deleted, then revoke()) that landed after the last read had its revoked/{uid} cleared just now:
+      // read once more and, if the person is gone, revoke again, so every interleaving ends revoked
+      if (!(await load()).found) { await adm.revoke(token.sub); return json({ claims: {} }); }
+    }
     return json({ claims });
   } catch (e) {
     console.error('claims failed', e?.message);

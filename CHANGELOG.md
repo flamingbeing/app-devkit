@@ -3,6 +3,13 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.13.2
+
+- `worker/claims.js` 1.4.2: a member removed while their page was asking `/api/claims` could keep access for the hour
+  their ID token had left. The ask read the role doc (still there), then cleared `revoked/{uid}` after the removal had
+  written it, so the rules and the files route let the old token through. The ask now reads the role once more after
+  clearing and, if the person is gone, revokes again (every interleaving ends revoked). Apps copy the new file.
+
 ## 1.13.1
 
 - `soak.yml`: the browser repeats now run in batches (`batch`, default 5; `tools/soak-batches.sh`), one Playwright
