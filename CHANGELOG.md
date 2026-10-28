@@ -3,6 +3,14 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.12.0
+
+- New block `changed-files`: `id: changes` then `if: steps.changes.outputs.app == 'true'` on a heavy job's steps. On a pull
+  request that changes only Markdown, `docs/` or `LICENSE` the job still runs and succeeds in seconds, so a required check
+  never hangs; pushes, other events and anything unclear (failed fetch, empty diff) report `app=true`. Inputs `ignore` and
+  `keep` (default `keep`: `app/*`, `e2e/*`, `fixtures/*`) change what counts. Used by this repo's `playwright-kit` job.
+  Nothing existing changes.
+
 ## 1.11.1
 
 - `worker/claims.js` 1.4.1: `/api/claims` reads the role again after writing the claims and writes again if it changed

@@ -25,6 +25,25 @@ cannot install on). Call them after `actions/checkout`.
     install: 'true'           # npm ci when a lockfile exists
 ```
 
+### `changed-files`
+
+Says whether a pull request changes any app file, so a browser job can skip its steps in seconds on a docs-only PR. The
+job still runs and succeeds (a required check never hangs); pushes and unclear cases report `app=true`. Use it inside the
+job after checkout, never as a trigger-level `paths` filter.
+
+```yaml
+- uses: actions/checkout@...
+- id: changes
+  uses: flamingbeing/app-devkit/changed-files@v1
+- if: steps.changes.outputs.app == 'true'
+  uses: flamingbeing/app-devkit/setup-node@v1
+# ...every later step carries the same `if:`
+```
+
+`ignore` (default `*.md`, `docs/*`, `LICENSE`) and `keep` (default `app/*`, `e2e/*`, `fixtures/*`, checked first) are
+newline-separated shell patterns (whitespace is trimmed). Markdown outside `keep` counts as docs: list any folder whose
+Markdown the app serves or the tests read.
+
 ### `setup-browser`
 
 Playwright Chromium only, **without** `--with-deps` (the apt step is the slow part; the runner image already has the
