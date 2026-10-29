@@ -3,6 +3,13 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.14.3
+
+- `soak-report.mjs`: skips folders in the results folder. 1.14.2 put `test-results/` there, and the report read it as a
+  file (EISDIR), so the step "Update the Nightly soak issue" failed on every night with a failing batch.
+- `soak-batches.sh`: before each batch waits up to 30 s for the app and emulator ports (`SOAK_PORTS`, default
+  `4173 8080 9099`) to be free, and names the holder if they stay taken (a step once died on "port 4173 is already used").
+
 ## 1.14.2
 
 - `soak.yml`: `kit-ref` now defaults to this release's own tag (it was stuck on v1.13.7, so apps that did not set it ran

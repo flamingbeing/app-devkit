@@ -16,6 +16,12 @@ while [ "$left" -gt 0 ]; do
   n=$(( left < BATCH ? left : BATCH ))
   left=$(( left - n ))
   echo "::group::$PREFIX batch $i ($n runs)"
+  # The last invocation's servers (app 4173, emulators 8080/9099) can still be shutting down; Playwright refuses to
+  # start on a taken port, which killed a whole step. Wait up to 30 s, then say who holds the port.
+  for port in ${SOAK_PORTS:-4173 8080 9099}; do
+    for _ in $(seq 1 30); do (echo >"/dev/tcp/127.0.0.1/$port") 2>/dev/null || break; sleep 1; done
+    if (echo >"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then echo "::warning::port $port still taken before $PREFIX batch $i: $(ss -ltnp 2>/dev/null | grep ":$port " | head -1)"; fi
+  done
   # shellcheck disable=SC2086  # TEST_CMD and EXTRA_ARGS are words on purpose
   out="$SOAK_DIR/test-results/$PREFIX.b$i"
   failed=0

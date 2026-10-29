@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { summarisePlaywright, renderBody, cleanCount, hasFailures, collect, runUrl } from '../../tools/soak-report.mjs';
@@ -82,4 +82,13 @@ test('run link comes from the API, so a renamed repo links its current name', ()
 test('run link falls back to the built one when the API fails', () => {
   const env = { GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'o/r', GITHUB_RUN_ID: '9' };
   assert.equal(runUrl(env, () => { throw new Error('403'); }), 'https://github.com/o/r/actions/runs/9');
+});
+
+test('a test-results folder beside the reports is skipped, not read (1.14.3)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'soak-'));
+  mkdirSync(join(dir, 'test-results', 'normal.b1'), { recursive: true });
+  writeFileSync(join(dir, 'unit.ok.txt'), 'unit: 5 of 5 runs passed\n');
+  const r = collect(dir);
+  assert.equal(hasFailures(r), false);
+  assert.deepEqual(r.passed, ['unit: 5 of 5 runs passed']);
 });
