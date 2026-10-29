@@ -3,6 +3,12 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.14.1
+
+- `soak-report.mjs`: the Nightly soak issue links the run by the repo's current name from the API, not
+  `GITHUB_REPOSITORY` as is. After a repo rename that variable keeps the old name (tasks was sandbox-app), so the issue linked
+  `sandbox-app/actions/runs/<id>`. Apps pinned to a soak.yml tag pick this up by bumping to v1.14.1.
+
 ## 1.14.0
 
 - New reusable `e2e.yml`: the browser tests split over `shards` parallel runners (Playwright `--shard`, even by test

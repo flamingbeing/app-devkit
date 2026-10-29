@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { summarisePlaywright, renderBody, cleanCount, hasFailures, collect } from '../../tools/soak-report.mjs';
+import { summarisePlaywright, renderBody, cleanCount, hasFailures, collect, runUrl } from '../../tools/soak-report.mjs';
 
 const report = {
   suites: [{ file: 'a.spec.mjs', specs: [], suites: [{ specs: [
@@ -69,4 +69,17 @@ test('a night of only unit and model steps that passed is clean, not "no results
   const r = collect(dir);
   assert.equal(hasFailures(r), false);
   assert.match(renderBody(r, { run: 'r', date: 'd', clean: 1 }), /Clean tonight \(model: SOAK_SEED_N=24920 passed, unit: 50 of 50 runs passed\)/);
+});
+
+test('run link comes from the API, so a renamed repo links its current name', () => {
+  const env = { GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'o/old-name', GITHUB_RUN_ID: '9' };
+  let asked;
+  const url = runUrl(env, (...a) => { asked = a; return 'o/new-name\n'; });
+  assert.equal(url, 'https://github.com/o/new-name/actions/runs/9');
+  assert.equal(asked[1], 'repos/o/old-name');
+});
+
+test('run link falls back to the built one when the API fails', () => {
+  const env = { GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'o/r', GITHUB_RUN_ID: '9' };
+  assert.equal(runUrl(env, () => { throw new Error('403'); }), 'https://github.com/o/r/actions/runs/9');
 });

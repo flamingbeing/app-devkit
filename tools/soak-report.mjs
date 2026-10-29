@@ -88,12 +88,26 @@ export function cleanCount(body) {
 
 const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8' });
 
+// The run link. GITHUB_REPOSITORY is the name the repo had when the run was created: after a rename (tasks was
+// sandbox-app) it, and the runner's checkout path, keep the old name, so a link built from it points at the old
+// name. The repo API (any token that can read the repo) answers with the current full_name, so build from that; the
+// variable is only the fallback.
+export function runUrl(env, ask = gh) {
+  const fallback = env.GITHUB_REPOSITORY;
+  let name = fallback;
+  try {
+    const n = ask('api', `repos/${fallback}`, '--jq', '.full_name').trim();
+    if (/^[\w.-]+\/[\w.-]+$/.test(n)) name = n;
+  } catch { /* keep the variable's name */ }
+  return `${env.GITHUB_SERVER_URL}/${name}/actions/runs/${env.GITHUB_RUN_ID}`;
+}
+
 function main() {
   const dir = process.argv[2];
   const result = collect(dir);
   const failing = hasFailures(result);
   const repo = process.env.GITHUB_REPOSITORY;
-  const run = `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+  const run = runUrl(process.env);
   const date = new Date().toISOString().slice(0, 10) + ' UTC';
   const open = JSON.parse(gh('issue', 'list', '--repo', repo, '--state', 'open', '--search', `"${TITLE}" in:title`, '--json', 'number,title,body'))
     .find(i => i.title === TITLE);
