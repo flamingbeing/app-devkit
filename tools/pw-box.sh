@@ -40,6 +40,9 @@ fi
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 REPO=$(pwd)
+MOUNT=$REPO
+case $(uname -s) in MINGW*|MSYS*) WIN=1; export MSYS_NO_PATHCONV=1; MOUNT=$(pwd -W) ;; *) WIN= ;; esac   # Git Bash + Docker Desktop
+[ -n "${PW_BOX_JSON:-}" ] && RUNARGS+=(-e "PLAYWRIGHT_JSON_OUTPUT_NAME=$PW_BOX_JSON")   # pw-run.sh: the JSON report, under /work
 [ -f "$REPO/playwright.config.mjs" ] || { echo "pw-box: run from a repo root with a playwright.config.mjs" >&2; exit 2; }
 
 PW=$(node -e 'const p=require("./package.json");const v=(p.devDependencies||{})["@playwright/test"]||(p.dependencies||{})["@playwright/test"];console.log(v)')
@@ -95,13 +98,15 @@ trap 'rm -rf "$REPO/.pw-box.config.mjs"' EXIT
 
 # docker mode (a cloud session): the repo's git dependencies (github: ssh URLs) are installed here on the host, which has
 # the git credentials, not in the box
-if [ "$ENGINE" = docker ] && [ ! -d "$REPO/node_modules" ]; then
+# (not on Windows: a Windows node_modules would not run in the Linux box; there the box installs them over https)
+if [ "$ENGINE" = docker ] && [ -z "$WIN" ] && [ ! -d "$REPO/node_modules" ]; then
   GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ npm ci --no-audit --no-fund
 fi
 
 START=$(date +%s)
 $ENGINE run --rm --ipc=host --init ${NETARGS[@]+"${NETARGS[@]}"} ${RUNARGS[@]+"${RUNARGS[@]}"} \
-  -v "$REPO":/work:Z -w /work \
+  -v "$MOUNT":/work:Z -w /work \
+  -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf -e GIT_CONFIG_VALUE_0=ssh://git@github.com/ \
   -e CI=1 -e PW_BOX_BROWSERS="$BROWSERS" -e PW_CHROMIUM= \
   "$IMAGE" bash -c '[ -d node_modules ] || npm ci --no-audit --no-fund
   if [ -f /pw-box-ca.crt ]; then mkdir -p ~/.pki/nssdb; certutil -N --empty-password -d sql:$HOME/.pki/nssdb 2>/dev/null; awk "/BEGIN CERT/{n++} {print > \"/tmp/pwca\" n \".crt\"}" /pw-box-ca.crt; for c in /tmp/pwca*.crt; do certutil -d sql:$HOME/.pki/nssdb -A -t C,, -n "pw-box-$c" -i "$c"; done; fi

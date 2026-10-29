@@ -3,6 +3,15 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.13.8
+
+- `tools/pw-run.sh <owner/repo> [ref] [-- <playwright args>]`: one call fetches the repo at a ref, runs its Playwright
+  specs in Chromium, Firefox and WebKit through `pw-box.sh` (podman, or docker / Docker Desktop) and prints a short
+  summary from the JSON report (`tools/pw-summary.mjs`: per browser counts and the failing tests, at most ~20 lines);
+  the full output stays in a log file. Works through `curl ... | bash -s --` on a host without a kit checkout.
+- `pw-box.sh`: `PW_BOX_JSON` passes the JSON report path into the box; runs from Git Bash with Docker Desktop on
+  Windows; the box fetches `github:` dependencies over https.
+
 ## 1.13.7
 
 - `soak.yml`: a night that runs only unit, chaos or model steps and passes is clean again. Those steps now write a
