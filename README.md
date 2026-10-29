@@ -427,7 +427,9 @@ jobs:
 
 Inputs: `emulators`, `test-command` (`npx playwright test`), `repeat` (10), `slow-repeat` (5), `batch` (5: runs per Playwright invocation, so the emulators are emptied between batches), `blips` (false: short
 offline blips in the slow runs; a spec that goes offline on purpose can fight them), `unit-command`, `unit-repeat`
-(100), `chaos-command`, `model-command`, `kit-ref` (the scripts' tag), `playwright-version`, `node-version`.
+(100), `chaos-command`, `model-command`, `kit-ref` (the scripts' tag), `playwright-version`, `node-version`, `browsers`
+(`chromium`; e.g. `chromium firefox` with a `test-command` that selects those projects; the slow-phone profile throttles
+Chromium only).
 
 ## Speed recipe the blocks follow
 
