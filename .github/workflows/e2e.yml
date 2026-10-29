@@ -1,0 +1,170 @@
+# Reusable: the browser tests split over parallel runners ("shards"), plus one `<name>` job that passes only when every
+# shard passed. Used by an app's quick Checks (Chromium phone, sharded so no runner takes much over a minute) and by its
+# Full checks (other browsers, the Vite build's full run). The suite needs `fullyParallel: true` (the kit's base
+# config sets it) so Playwright's --shard splits it by test, evenly. A pull request that only changes docs skips the
+# steps (changed-files), and the jobs still pass.
+#   jobs:
+#     e2e:
+#       uses: flamingbeing/app-devkit/.github/workflows/e2e.yml@v1.14.0
+#       with:
+#         shards: 4
+#         args: --project=phone
+#         emulators: firestore,auth          # empty for an app with no emulators
+#   A Vite run:  build-command: npm run vite, app-dir: dist (sets APP_DIR for the tests).
+#   A full run on a pull request's head: ref: '123' (a PR number) or any branch, tag or SHA.
+name: Browser tests
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: Label for the jobs and the failure artifact (e.g. e2e, vite, webkit).
+        type: string
+        default: e2e
+      shards:
+        description: Parallel runners. Pick enough that no shard runs much over a minute.
+        type: number
+        default: 1
+      args:
+        description: Extra Playwright arguments (e.g. `--project=phone`, or spec files for a short smoke).
+        type: string
+        default: ''
+      test-command:
+        type: string
+        default: npx playwright test
+      ref:
+        description: What to test. Empty = the triggering commit; digits = that pull request's head; else a branch, tag or SHA.
+        type: string
+        default: ''
+      working-directory:
+        type: string
+        default: .
+      browsers:
+        description: Playwright browsers to install, space separated.
+        type: string
+        default: chromium
+      webkit-deps:
+        description: Install WebKit's system libraries (apt; slow, so only for WebKit runs).
+        type: boolean
+        default: false
+      playwright-version:
+        description: Exact Playwright version; empty = the lockfile's.
+        type: string
+        default: ''
+      emulators:
+        description: Firebase emulators the tests need (comma separated, as setup-emulators). Empty = none.
+        type: string
+        default: ''
+      firebase-tools-version:
+        type: string
+        default: '15.33.0'
+      build-command:
+        description: Optional. Runs before the tests (e.g. `npm run vite`).
+        type: string
+        default: ''
+      app-dir:
+        description: Optional. Set as APP_DIR for the tests (e.g. `dist` for the Vite build).
+        type: string
+        default: ''
+      timeout-minutes:
+        description: Per shard.
+        type: number
+        default: 15
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      shards: ${{ steps.list.outputs.shards }}
+      ref: ${{ steps.list.outputs.ref }}
+    steps:
+      - id: list
+        env:
+          N: ${{ inputs.shards }}
+          REF: ${{ inputs.ref }}
+        run: |
+          [ "$N" -ge 1 ] 2>/dev/null || { echo "::error::shards must be 1 or more"; exit 1; }
+          echo "shards=[$(seq -s, 1 "$N")]" >> "$GITHUB_OUTPUT"
+          case "$REF" in
+            '') echo "ref=" >> "$GITHUB_OUTPUT" ;;
+            *[!0-9]*) echo "ref=$REF" >> "$GITHUB_OUTPUT" ;;
+            *) echo "ref=refs/pull/$REF/head" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  shard:
+    needs: plan
+    name: ${{ inputs.name }} ${{ matrix.shard }} of ${{ inputs.shards }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+      - id: changes
+        uses: flamingbeing/app-devkit/changed-files@v1.13.9
+      - if: steps.changes.outputs.app == 'true'
+        uses: flamingbeing/app-devkit/setup-node@v1.13.9
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      - if: steps.changes.outputs.app == 'true'
+        uses: flamingbeing/app-devkit/setup-browser@v1.13.9
+        with:
+          playwright-version: ${{ inputs.playwright-version }}
+          browsers: ${{ inputs.browsers }}
+      - name: WebKit's system libraries
+        if: steps.changes.outputs.app == 'true' && inputs.webkit-deps
+        working-directory: ${{ inputs.working-directory }}
+        run: npx playwright install-deps webkit
+      - if: steps.changes.outputs.app == 'true' && inputs.emulators != ''
+        uses: flamingbeing/app-devkit/setup-emulators@v1.13.9
+        with:
+          firebase-tools-version: ${{ inputs.firebase-tools-version }}
+          emulators: ${{ inputs.emulators }}
+      - name: Build
+        if: steps.changes.outputs.app == 'true' && inputs.build-command != ''
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          BUILD_CMD: ${{ inputs.build-command }}
+        run: $BUILD_CMD
+      - name: Browser tests (${{ matrix.shard }} of ${{ inputs.shards }})
+        if: steps.changes.outputs.app == 'true'
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          TEST_CMD: ${{ inputs.test-command }}
+          ARGS: ${{ inputs.args }}
+          SHARD: ${{ matrix.shard }}
+          N: ${{ inputs.shards }}
+          APP_DIR_IN: ${{ inputs.app-dir }}
+        run: |
+          [ -n "$APP_DIR_IN" ] && export APP_DIR="$APP_DIR_IN"
+          extra=""; [ "$N" -gt 1 ] && extra="--shard=$SHARD/$N"
+          # shellcheck disable=SC2086 # the command and args are word lists on purpose
+          $TEST_CMD $ARGS $extra
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure() && steps.changes.outputs.app == 'true'
+        with:
+          name: ${{ inputs.name }}-results-${{ matrix.shard }}
+          path: ${{ inputs.working-directory }}/test-results
+          if-no-files-found: ignore
+
+  all:
+    needs: shard
+    if: always()
+    name: ${{ inputs.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Every shard passed
+        env:
+          RESULT: ${{ needs.shard.result }}
+        run: '[ "$RESULT" = success ] || { echo "::error::a shard did not pass ($RESULT)"; exit 1; }'

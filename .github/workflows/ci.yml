@@ -215,6 +215,16 @@ jobs:
           grep -qx '15.33.0' npx.log
           if grep -q '\.tgz' npx.log; then echo "npx downloaded the package"; exit 1; fi
 
+  e2e-workflow:
+    # the reusable sharded browser-test workflow on the Playwright fixture (2 shards, then the gate job)
+    uses: ./.github/workflows/e2e.yml
+    with:
+      name: fixture
+      shards: 2
+      working-directory: fixtures/playwright
+      playwright-version: 1.56.1
+      emulators: firestore,auth
+
   deploy-worker-dry-run:
     uses: ./.github/workflows/deploy-worker.yml
     with:

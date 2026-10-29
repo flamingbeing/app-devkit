@@ -405,6 +405,30 @@ test('signs in', async ({ page }) => { const errors = watchConsole(page); /* sig
 
 Run by hand: `LIVE_URL=https://… LIVE_SPEC=e2e/live LIVE_TEST_EMAIL=… LIVE_TEST_PASSWORD=… npx playwright test -c .devkit/playwright/live.config.mjs`.
 
+### `e2e.yml`
+
+The browser tests split over parallel runners, for an app's quick and full checks. Quick checks (every PR and push to
+`main`): unit, type check, rules, Chromium phone e2e in enough shards that none runs much over a minute, the Vite build
+with a short smoke, secrets and proofread. Full checks (other browsers, the jank gate, the Vite build's full browser
+run, heavy axe runs): the app's own `Full checks` workflow, run nightly next to the soak and by hand
+(`workflow_dispatch`, optional PR number or ref); a repo variable `FULL_CHECKS_ON_PRS=true` makes its PRs run them too.
+
+```yaml
+jobs:
+  e2e:
+    uses: flamingbeing/app-devkit/.github/workflows/e2e.yml@v1.14.0
+    with:
+      shards: 4
+      args: --project=phone
+      emulators: firestore,auth          # empty for an app with no emulators
+```
+
+Inputs: `name` (`e2e`: job label and failure artifact), `shards` (1), `args`, `test-command` (`npx playwright test`),
+`ref` (empty = the triggering commit; digits = that PR's head), `working-directory`, `browsers` (`chromium`),
+`webkit-deps` (false), `playwright-version` (the lockfile's), `emulators`, `firebase-tools-version`, `build-command`
+and `app-dir` (e.g. `npm run vite` and `dist`, set as `APP_DIR`), `timeout-minutes` (15 per shard). The gate job is
+named `name`, so one status covers every shard.
+
 ### `soak.yml`
 
 The nightly soak: the browser tests many times (default 20 normal runs plus 10 under a slow-phone profile: CPU 4x, slow
