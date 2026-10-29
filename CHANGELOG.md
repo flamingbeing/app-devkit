@@ -3,6 +3,14 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.14.0
+
+- New reusable `e2e.yml`: the browser tests split over `shards` parallel runners (Playwright `--shard`, even by test
+  with the base config's `fullyParallel`), then one gate job named after `name` that passes only when every shard did.
+  Inputs for the quick/full split: `args` (projects or spec files), `browsers`, `webkit-deps`, `emulators`,
+  `build-command` + `app-dir` (a Vite run), `ref` (a PR number, branch, tag or SHA, for a dispatched full run),
+  `working-directory`. Docs-only pull requests skip the steps (changed-files) and still pass.
+
 ## 1.13.9
 
 - `soak.yml`: `browsers` input (default `chromium`), passed to setup-browser, so a soak can run other browsers' projects
