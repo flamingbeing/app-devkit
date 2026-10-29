@@ -69,7 +69,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends $JDK_PKG libnss
 RUN npm install -g firebase-tools@$FIREBASE_TOOLS
 RUN firebase setup:emulators:firestore
 DOCKER
-  $ENGINE build ${BUILDARGS[@]+"${BUILDARGS[@]}"} -f "$CTX/Containerfile" -t "$IMAGE" "$CTX"
+  CTXD=$CTX; [ -n "$WIN" ] && CTXD=$(cd "$CTX" && pwd -W)   # Docker Desktop wants a Windows path
+  $ENGINE build ${BUILDARGS[@]+"${BUILDARGS[@]}"} -f "$CTXD/Containerfile" -t "$IMAGE" "$CTXD"
   rm -rf "$CTX"
 fi
 
