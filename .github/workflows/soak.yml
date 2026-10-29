@@ -39,6 +39,12 @@ on:
       node-version:
         type: string
         default: '22'
+      browsers:
+        description: >-
+          Playwright browsers to install, space separated (e.g. `chromium firefox`). The slow-phone profile throttles
+          Chromium only; other browsers run those runs at full speed.
+        type: string
+        default: chromium
       test-command:
         description: The browser test command; the soak adds --repeat-each, --retries=0 and the JSON reporter.
         type: string
@@ -104,6 +110,7 @@ jobs:
       - uses: flamingbeing/app-devkit/setup-browser@v1.12.0
         with:
           playwright-version: ${{ inputs.playwright-version }}
+          browsers: ${{ inputs.browsers }}
       - if: inputs.emulators != ''
         uses: flamingbeing/app-devkit/setup-emulators@v1.12.0
         with:

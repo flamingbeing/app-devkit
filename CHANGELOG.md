@@ -3,6 +3,12 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.13.9
+
+- `soak.yml`: `browsers` input (default `chromium`), passed to setup-browser, so a soak can run other browsers' projects
+  too (e.g. `chromium firefox` with `--project=phone --project=firefox`). The slow-phone profile still throttles
+  Chromium only.
+
 ## 1.13.8
 
 - `tools/pw-run.sh <owner/repo> [ref] [-- <playwright args>]`: one call fetches the repo at a ref, runs its Playwright
