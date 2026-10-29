@@ -5,6 +5,8 @@ becomes `v2`.
 
 ## 1.14.3
 
+- `soak.yml`: the normal browser step may run 60 minutes (was 40) and the job 150 (was 100). The notes suite needs about 22 minutes
+  per batch of 5, so 10 runs hit the limit, the step was killed and its web server held the port for the next step.
 - `soak-report.mjs`: skips folders in the results folder. 1.14.2 put `test-results/` there, and the report read it as a
   file (EISDIR), so the step "Update the Nightly soak issue" failed on every night with a failing batch.
 - `soak-batches.sh`: before each batch waits up to 30 s for the app and emulator ports (`SOAK_PORTS`, default
