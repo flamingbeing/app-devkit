@@ -1,7 +1,7 @@
 // Small tools: check-links anchors, check-pins non-tag pins, fsAdmin timestamps.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -59,4 +59,23 @@ test('fsAdmin list follows nextPageToken: a collection over one page comes back 
     assert.deepEqual((await fsAdmin('demo-x').list('spaces/_/items')).map(d => d.n), [1, 2, 3]);
     assert.equal(urls.length, 2);
   } finally { globalThis.fetch = real; }
+});
+
+test('soak.yml kit-ref default is this release (package.json version), so helpers cannot lag', () => {
+  const yml = readFileSync(join(root, '.github/workflows/soak.yml'), 'utf8');
+  const def = yml.match(/kit-ref:[\s\S]*?default:\s*(v\S+)/)?.[1];
+  assert.equal(def, `v${JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version}`);
+});
+
+test('soak-batches keeps a failing batch in its own folder, drops a passing one', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'soak-'));
+  const run = cmd => spawnSync('bash', [join(root, 'tools/soak-batches.sh')], { encoding: 'utf8', env: { ...process.env, SOAK_DIR: dir, PREFIX: 'normal', REPEAT: '4', BATCH: '2', TEST_CMD: cmd } });
+  // Fake runner: batch 1 passes, batch 2 fails; it empties --output like Playwright and writes a file for the failing test.
+  const fake = join(dir, 'fake.sh');
+  writeFileSync(fake, 'for a; do case $a in --output=*) o=${a#--output=};; esac; done\nrm -rf "$o"; mkdir -p "$o/t-fail" "$o/t-pass"\nif [ -e "$SOAK_DIR/seen" ]; then echo ctx > "$o/t-fail/error-context.md"; exit 1; fi\ntouch "$SOAK_DIR/seen"\n');
+  const r = run(`bash ${fake}`);
+  assert.equal(r.status, 1);
+  assert.ok(!existsSync(join(dir, 'test-results/normal.b1')));
+  assert.ok(existsSync(join(dir, 'test-results/normal.b2/t-fail/error-context.md')));
+  assert.ok(!existsSync(join(dir, 'test-results/normal.b2/t-pass')));
 });
