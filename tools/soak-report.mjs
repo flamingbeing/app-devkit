@@ -3,7 +3,7 @@
 //   failures tonight -> issue opened or its body rewritten (failing tests with counts, run link), clean nights reset to 0
 //   clean night      -> an open issue counts it; after 7 clean nights in a row the workflow closes the issue
 // Usage: node soak-report.mjs <results-dir>   (GH_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_SERVER_URL; SOAK_DRY=1 prints only)
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
@@ -37,8 +37,8 @@ export function collect(dir) {
   const rows = [];   // { source, runs, failed: [[title, n]] }
   const notes = [];
   const passed = [];   // *.ok.txt lines: unit, chaos and model steps that ran and passed
-  let files = [];
-  try { files = readdirSync(dir).sort(); } catch { /* setup died before the folder existed */ }
+  let files = [];   // plain files only: test-results/ (kept traces) is a folder, not a report
+  try { files = readdirSync(dir).filter(f => statSync(join(dir, f)).isFile()).sort(); } catch { /* setup died before the folder existed */ }
   for (const f of files) {
     const text = readFileSync(join(dir, f), 'utf8');
     if (f.endsWith('.json')) {
