@@ -3,6 +3,16 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.14.2
+
+- `soak.yml`: `kit-ref` now defaults to this release's own tag (it was stuck on v1.13.7, so apps that did not set it ran
+  the old helpers: `db.list` read only 300 docs and caused a tasks flake). A test in `fixtures/tools` fails CI when the
+  default and `package.json` differ, so it cannot lag again; bump both on each release.
+- `soak-batches.sh`: each batch writes Playwright's output to `soak-results/test-results/<prefix>.b<N>` (Playwright
+  empties its output folder on every invocation, so earlier batches' traces, screenshots and error-context were lost).
+  Only failing batches are kept, empty test folders removed, total capped at 150 MB (`SOAK_RESULTS_MAX_MB`). They ship in
+  the `soak-results` artifact.
+
 ## 1.14.1
 
 - `soak-report.mjs`: the Nightly soak issue links the run by the repo's current name from the API, not

@@ -22,9 +22,12 @@ on:
   workflow_call:
     inputs:
       kit-ref:
-        description: Ref of app-devkit to take the soak scripts from (the kit's version tag).
+        description: >-
+          Ref of app-devkit to take the soak scripts and test helpers from (the kit's version tag). The default is this
+          release's own tag (a CI test keeps it equal to package.json), so an app that does not set it runs the helpers
+          of the soak.yml it calls; set it only to pin older scripts.
         type: string
-        default: v1.13.7
+        default: v1.14.2
       emulators:
         description: Firebase emulators the browser tests need (comma separated, as setup-emulators). Empty = none.
         type: string
@@ -185,6 +188,5 @@ jobs:
           name: soak-results
           path: |
             soak-results
-            test-results
           retention-days: 7
           if-no-files-found: ignore
