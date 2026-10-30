@@ -3,6 +3,13 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.15.0
+
+- New tool `startup-size.mjs <page.html> [--max <KiB gz>] [--max-files <n>] [--json]`: the JS and CSS a page loads
+  before it can draw (its scripts, modulepreloads, stylesheets and their static imports; `import()` is not followed;
+  other origins count as requests only), gzipped. Fails over the budget and names the biggest files, so an app's
+  Checks catch a feature that slows its first screen.
+
 ## 1.14.3
 
 - `soak.yml`: the normal browser step may run 60 minutes (was 40) and the job 150 (was 100). The notes suite needs about 22 minutes

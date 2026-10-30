@@ -27,7 +27,7 @@ on:
           release's own tag (a CI test keeps it equal to package.json), so an app that does not set it runs the helpers
           of the soak.yml it calls; set it only to pin older scripts.
         type: string
-        default: v1.14.3
+        default: v1.15.0
       emulators:
         description: Firebase emulators the browser tests need (comma separated, as setup-emulators). Empty = none.
         type: string
