@@ -146,6 +146,11 @@ Tools (run with `node .devkit/tools/<name>.mjs`):
 - `startup-size.mjs <page.html> [--max <KiB gz>] [--max-files <n>] [--json]`: what a page loads before it can draw
   (scripts, modulepreloads, stylesheets and their static imports, gzipped; `import()` and other origins' sizes are not
   counted). Over a budget it fails and names the biggest files: load those on first use instead.
+- `bundle-page.mjs <page.html> [--sw <sw.js>] [--check]`: at deploy time, joins the page's startup files and the core at
+  its exact pin into a few (esbuild; each literal `import()` stays its own file, loaded on first use), next to the source
+  with source maps, then points the page (and that sw.js's SHELL) at them. Other origins and the import map's other
+  bare names stay as they are. Never committed: run it through the `bundle` input of `deploy-worker.yml` and `e2e.yml`.
+  Keep every `import()` literal, or that module loads twice.
 - `check-links.mjs [folder]`: fails on a relative link or `#anchor` in `.md`/`.html` that points nowhere (a file missing next to the page is also looked for in `<page folder>/public/`).
 - `starter-drift.mjs --template <checkout> [--app .] [--json] [--strict]`: for an app made from a starter template (its
   `.starter.json` records the template version, commit and the app's values), lists the template's files the app has
@@ -327,14 +332,15 @@ jobs:
     with:
       install: true                          # npm ci first (default false)
       build-command: npm run build           # default: none
-      stamp-command: node tools/stamp.mjs    # default: none; runs after the build
+      bundle: app/index.html --sw app/public/sw.js   # default: none; bundle-page.mjs after the build
+      stamp-command: node tools/stamp.mjs    # default: none; runs after the build and bundle
       beta-env: true                         # a push to `beta` deploys the Worker's `beta` environment
     secrets: inherit                         # CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
 ```
 
 Other inputs: `node-version` (22), `working-directory` (`.`), `dry-run` (build and `wrangler deploy --dry-run`, no
 secrets needed), `wrangler-version` (exact, default `4.152.0`), `smoke-url` (fetched with `curl -fsS` after the deploy;
-empty = none).
+empty = none), `devkit-ref` (`v1`: the kit ref `bundle` takes its tool from).
 
 ### `deploy-rules.yml`
 
@@ -429,7 +435,8 @@ jobs:
 Inputs: `name` (`e2e`: job label and failure artifact), `shards` (1), `args`, `test-command` (`npx playwright test`),
 `ref` (empty = the triggering commit; digits = that PR's head), `working-directory`, `browsers` (`chromium`),
 `webkit-deps` (false), `playwright-version` (the lockfile's), `emulators`, `firebase-tools-version`, `build-command`
-and `app-dir` (e.g. `npm run vite` and `dist`, set as `APP_DIR`), `timeout-minutes` (15 per shard). The gate job is
+and `app-dir` (e.g. `npm run vite` and `dist`, set as `APP_DIR`), `bundle` (the deploy's `bundle` args, so the
+tests run on the deployed shape) and `devkit-ref` (`v1`), `timeout-minutes` (15 per shard). The gate job is
 named `name`, so one status covers every shard.
 
 ### `soak.yml`

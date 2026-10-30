@@ -3,6 +3,15 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.16.0
+
+- New tool `bundle-page.mjs <page.html> [--sw <sw.js>] [--check]`: joins a page's startup files and the core at its
+  exact pin into a few at deploy time (esbuild 0.24.2, fetched into the temp folder; literal `import()`s stay separate
+  files; source maps beside them), and points the page and its service worker's SHELL at them. The logbook went from
+  about 60 startup scripts to 23.
+- `deploy-worker.yml` and `e2e.yml`: new inputs `bundle` (its args; runs after the build, before the stamp or the tests)
+  and `devkit-ref` (`v1`, the kit ref the tool comes from).
+
 ## 1.15.0
 
 - New tool `startup-size.mjs <page.html> [--max <KiB gz>] [--max-files <n>] [--json]`: the JS and CSS a page loads

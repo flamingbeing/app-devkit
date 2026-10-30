@@ -77,6 +77,7 @@ jobs:
           test -f .devkit/tools/proofread.mjs
           test -f .devkit/tools/shots.mjs
           test -f .devkit/tools/startup-size.mjs
+          test -f .devkit/tools/bundle-page.mjs
           test ! -d node_modules
       - name: check and proofread pass on a good fixture
         working-directory: fixtures/tools/good
@@ -231,7 +232,9 @@ jobs:
     with:
       working-directory: fixtures/worker
       build-command: node build.mjs
-      stamp-command: node stamp.mjs
+      bundle: site/index.html
+      devkit-ref: ${{ github.sha }}
+      stamp-command: BUNDLED=1 node stamp.mjs
       dry-run: true
       wrangler-version: 4.152.0
       smoke-url: https://example.com/

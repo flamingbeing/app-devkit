@@ -2,3 +2,5 @@ node_modules/
 test-results/
 .devkit/
 *-debug.log
+fixtures/worker/site/js/*.b.js*
+fixtures/worker/site/js/chunk-*
