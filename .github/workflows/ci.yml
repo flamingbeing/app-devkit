@@ -76,6 +76,7 @@ jobs:
           test -f .devkit/tools/check.mjs
           test -f .devkit/tools/proofread.mjs
           test -f .devkit/tools/shots.mjs
+          test -f .devkit/tools/startup-size.mjs
           test ! -d node_modules
       - name: check and proofread pass on a good fixture
         working-directory: fixtures/tools/good

@@ -79,3 +79,29 @@ test('soak-batches keeps a failing batch in its own folder, drops a passing one'
   assert.ok(existsSync(join(dir, 'test-results/normal.b2/t-fail/error-context.md')));
   assert.ok(!existsSync(join(dir, 'test-results/normal.b2/t-pass')));
 });
+
+test('startup-size counts what a page starts and its static imports, not import() or other origins', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'size-'));
+  mkdirSync(join(dir, 'js'));
+  mkdirSync(join(dir, 'public/vendor'), { recursive: true });
+  writeFileSync(join(dir, 'index.html'), `<!doctype html><script type="importmap">{"imports":{"lib":"./vendor/lib.js","@core/ui":"https://core.example/ui.js"}}</script>
+<link rel="modulepreload" href="js/a.js"><link rel="stylesheet" href="style.css"><script type="module" src="./js/a.js"></script>`);
+  writeFileSync(join(dir, 'style.css'), 'body{margin:0}');
+  writeFileSync(join(dir, 'js/a.js'), "import { b } from './b.js';\nimport {\n  c,\n} from 'lib';\nimport { ui } from '@core/ui';\nconst later = () => import('./screen.js');\n");
+  writeFileSync(join(dir, 'js/b.js'), "export * from './b2.js';\nexport const b = 1;\n");
+  writeFileSync(join(dir, 'js/b2.js'), 'export const b2 = 2;\n');
+  writeFileSync(join(dir, 'js/screen.js'), 'x'.repeat(50000));
+  writeFileSync(join(dir, 'public/vendor/lib.js'), 'export const c = 3;\n');
+  const r = node('tools/startup-size.mjs', join(dir, 'index.html'), '--json');
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.deepEqual(out.files.map(f => f.file).sort(), ['js/a.js', 'js/b.js', 'js/b2.js', 'public/vendor/lib.js', 'style.css']);
+  assert.deepEqual(out.external, ['https://core.example/ui.js']);
+  assert.equal(out.requests, 6);
+  assert.equal(node('tools/startup-size.mjs', join(dir, 'index.html'), '--max-files', '5').status, 1);
+  writeFileSync(join(dir, 'js/b2.js'), Array.from({ length: 4000 }, (_, i) => `export const v${i} = ${Math.random()};`).join('\n'));
+  const over = node('tools/startup-size.mjs', join(dir, 'index.html'), '--max', '10');
+  assert.equal(over.status, 1);
+  assert.match(over.stderr, /over the 10 KiB budget/);
+  assert.match(over.stdout, /js\/b2\.js/);
+});

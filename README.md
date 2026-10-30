@@ -143,6 +143,9 @@ Tools (run with `node .devkit/tools/<name>.mjs`):
 - `proofread.mjs [--live] [--md]`: mistakes no app test looks for (lang, title, viewport, noindex, alt text, links to files; a file missing next to the page is also looked for in `<page folder>/public/`).
 - `shots.mjs pages <base-ref> | shoot <url> <out-dir> <name> <path>…`: phone screenshots for a visual change.
 - `step-timings.mjs <owner/repo> <run-id>`: job and step durations, to compare CI before and after a change.
+- `startup-size.mjs <page.html> [--max <KiB gz>] [--max-files <n>] [--json]`: what a page loads before it can draw
+  (scripts, modulepreloads, stylesheets and their static imports, gzipped; `import()` and other origins' sizes are not
+  counted). Over a budget it fails and names the biggest files: load those on first use instead.
 - `check-links.mjs [folder]`: fails on a relative link or `#anchor` in `.md`/`.html` that points nowhere (a file missing next to the page is also looked for in `<page folder>/public/`).
 - `starter-drift.mjs --template <checkout> [--app .] [--json] [--strict]`: for an app made from a starter template (its
   `.starter.json` records the template version, commit and the app's values), lists the template's files the app has
