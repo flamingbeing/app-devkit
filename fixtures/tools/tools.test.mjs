@@ -105,3 +105,34 @@ test('startup-size counts what a page starts and its static imports, not import(
   assert.match(over.stderr, /over the 10 KiB budget/);
   assert.match(over.stdout, /js\/b2\.js/);
 });
+
+test('bundle-page joins local startup files, splits import(), keeps other names, rewrites the page and SHELL', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bundle-'));
+  mkdirSync(join(dir, 'js'));
+  writeFileSync(join(dir, 'index.html'), `<!doctype html><script type="importmap">{"imports":{"lib":"./vendor/lib.js"}}</script>
+  <link rel="modulepreload" href="js/a.js">
+  <link rel="modulepreload" href="js/b.js">
+  <link rel="modulepreload" href="./vendor/lib.js">
+  <script>pre('js/screen.js')</script>
+  <script type="module" src="js/a.js"></script>`);
+  writeFileSync(join(dir, 'js/a.js'), "import { b } from './b.js';\nimport { c } from 'lib';\nexport const go = () => import('./screen.js');\nconsole.log(b, c);\n");
+  writeFileSync(join(dir, 'js/b.js'), 'export const b = 1;\n');
+  writeFileSync(join(dir, 'js/screen.js'), "import { b } from './b.js';\nexport const s = b + 1;\n");
+  writeFileSync(join(dir, 'sw.js'), "const VERSION = 'v1';\nconst SHELL = [\n  './', 'js/a.js', 'js/b.js', 'js/screen.js', 'vendor/lib.js',\n];\n");
+  const r = node('tools/bundle-page.mjs', join(dir, 'index.html'), '--sw', join(dir, 'sw.js'));
+  assert.equal(r.status, 0, r.stderr);
+  const html = readFileSync(join(dir, 'index.html'), 'utf8');
+  assert.match(html, /<script type="module" src="js\/a\.b\.js"><\/script>/);
+  assert.match(html, /<link rel="modulepreload" href="js\/a\.b\.js">/);
+  assert.doesNotMatch(html, /href="js\/b\.js"/);
+  assert.match(html, /href="\.\/vendor\/lib\.js"/);          // not inside the bundle: kept
+  const screen = /pre\('(js\/[^']+)'\)/.exec(html)[1];
+  assert.notEqual(screen, 'js/screen.js');
+  assert.ok(existsSync(join(dir, screen)) && existsSync(join(dir, 'js/a.b.js.map')));
+  assert.match(readFileSync(join(dir, 'js/a.b.js'), 'utf8'), /from"lib"/);   // bare name left for the import map
+  const shell = readFileSync(join(dir, 'sw.js'), 'utf8');
+  assert.doesNotMatch(shell, /'js\/(a|b|screen)\.js'/);
+  assert.match(shell, /'vendor\/lib\.js'/);
+  assert.match(shell, /'js\/a\.b\.js'/);
+  assert.ok(shell.includes(`'${screen}'`));
+});

@@ -29,6 +29,16 @@ on:
         description: Step run after the build (for example stamping versions). Empty = none.
         type: string
         default: ''
+      bundle:
+        description: >-
+          Optional. Joins a page's startup files and the pinned core into a few at this step (tools/bundle-page.mjs;
+          never committed), e.g. `app/index.html --sw app/public/sw.js`. Runs after the build, before the stamp.
+        type: string
+        default: ''
+      devkit-ref:
+        description: The kit ref whose tools/bundle-page.mjs the bundle step runs.
+        type: string
+        default: v1
       beta-env:
         description: A push to the `beta` branch deploys the Worker's `beta` environment.
         type: boolean
@@ -106,6 +116,22 @@ jobs:
         env:
           CMD: ${{ inputs.build-command }}
         run: bash -c "$CMD"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: steps.gate.outputs.go == 'true' && inputs.bundle != ''
+        with:
+          repository: flamingbeing/app-devkit
+          ref: ${{ inputs.devkit-ref }}
+          path: .devkit-bundle
+      - name: Bundle
+        if: steps.gate.outputs.go == 'true' && inputs.bundle != ''
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          ARGS: ${{ inputs.bundle }}
+          TOOL: ${{ github.workspace }}/.devkit-bundle/tools/bundle-page.mjs
+        run: |
+          # shellcheck disable=SC2086 # the args are a word list on purpose
+          node "$TOOL" $ARGS
+          rm -rf "$GITHUB_WORKSPACE/.devkit-bundle"
       - name: Stamp
         if: steps.gate.outputs.go == 'true' && inputs.stamp-command != ''
         working-directory: ${{ inputs.working-directory }}

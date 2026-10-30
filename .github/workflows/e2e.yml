@@ -66,6 +66,16 @@ on:
         description: Optional. Set as APP_DIR for the tests (e.g. `dist` for the Vite build).
         type: string
         default: ''
+      bundle:
+        description: >-
+          Optional. Joins a page's startup files and the pinned core into a few at this step (tools/bundle-page.mjs;
+          never committed), e.g. `app/index.html --sw app/public/sw.js`. Runs after the build, before the tests.
+        type: string
+        default: ''
+      devkit-ref:
+        description: The kit ref whose tools/bundle-page.mjs the bundle step runs.
+        type: string
+        default: v1
       timeout-minutes:
         description: Per shard.
         type: number
@@ -136,6 +146,22 @@ jobs:
         env:
           BUILD_CMD: ${{ inputs.build-command }}
         run: $BUILD_CMD
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: steps.changes.outputs.app == 'true' && inputs.bundle != ''
+        with:
+          repository: flamingbeing/app-devkit
+          ref: ${{ inputs.devkit-ref }}
+          path: .devkit-bundle
+      - name: Bundle
+        if: steps.changes.outputs.app == 'true' && inputs.bundle != ''
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          ARGS: ${{ inputs.bundle }}
+          TOOL: ${{ github.workspace }}/.devkit-bundle/tools/bundle-page.mjs
+        run: |
+          # shellcheck disable=SC2086 # the args are a word list on purpose
+          node "$TOOL" $ARGS
+          rm -rf "$GITHUB_WORKSPACE/.devkit-bundle"
       - name: Browser tests (${{ matrix.shard }} of ${{ inputs.shards }})
         if: steps.changes.outputs.app == 'true'
         working-directory: ${{ inputs.working-directory }}
