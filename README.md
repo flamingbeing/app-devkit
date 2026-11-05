@@ -132,7 +132,7 @@ export default baseConfig({
 ```
 
 `baseConfig` sets parallel tests, 1 retry in CI (0 locally; override with `retries`), trace and screenshot on failure,
-and lets anything you pass win. Helpers: `waitFor(fn)` and `waitForState(page, fn)` wait for a state instead of a sleep;
+and lets anything you pass win. `gaps.mjs`: the spacing audit, `await gaps(page)` (lines for blocks overlapping or under 8 px apart; scope defaults to the visible `.ui-screen`) and `spacing(page, label, { looks })` per look; call it per tab in the e2e. Helpers: `waitFor(fn)` and `waitForState(page, fn)` wait for a state instead of a sleep;
 `fsAdmin(project)` seeds, reads and clears Firestore emulator documents (skips the rules); `createTestUser(project,
 email)` makes or signs in an Auth emulator account; `emulatorServer` refuses a project that is not `demo-`.
 

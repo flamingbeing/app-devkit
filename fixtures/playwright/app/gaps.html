@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>gaps fixture</title>
+<style>
+  body { margin: 0; font: 16px sans-serif; }
+  .card { background: #eef; padding: 8px; margin: 0 16px 16px; height: 40px; }
+  #tight .card { margin-bottom: 2px; }   /* the bug the audit exists for: blocks touching */
+  #tight { background: none; }
+</style>
+<div class="ui-screen" id="ok"><div class="card">one</div><div class="card">two</div></div>
+<div class="ui-screen" id="tight" hidden><div class="card">one</div><div class="card">two</div></div>
+<script>window.show = (id) => { for (const s of document.querySelectorAll('.ui-screen')) s.hidden = s.id !== id; };</script>
