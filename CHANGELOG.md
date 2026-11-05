@@ -3,6 +3,13 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.17.0
+
+- New `playwright/gaps.mjs` (copied to `.devkit/playwright/` with the rest): `gaps(page, scope?)` lists painted blocks
+  under one parent that overlap or sit closer than `MIN` (8) px, one line each; `spacing(page, label, { scope, looks })`
+  runs it per look and returns `[name, ok, detail]` checks. An app calls it for every tab in every look: it caught 0 to
+  6 px gaps that screenshots missed. Fixture test in `playwright-kit`.
+
 ## 1.16.0
 
 - New tool `bundle-page.mjs <page.html> [--sw <sw.js>] [--check]`: joins a page's startup files and the core at its

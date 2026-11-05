@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { baseConfig } from '../../../playwright/base.mjs';
 import { waitFor, waitForState, createTestUser, fsAdmin } from '../../../playwright/helpers.mjs';
+import { gaps, spacing, MIN } from '../../../playwright/gaps.mjs';
 
 const db = fsAdmin('demo-fixture');
 const dir = path.resolve('app');
@@ -33,4 +34,16 @@ test('seed, read and clear per test; sign in as a test user', async () => {
 
 test('waitFor times out with a readable message', async () => {
   await expect(waitFor(() => false, { timeout: 300, message: 'nothing' })).rejects.toThrow(/waiting for nothing/);
+});
+
+test('spacing audit: clean screen passes, touching blocks are named, looks run in turn', async ({ page }) => {
+  await page.goto('file://' + path.join(dir, 'gaps.html'));
+  expect(await gaps(page)).toEqual([]);
+  const ok = await spacing(page, 'ok', { looks: [{ name: 'a', set: async () => {} }, { name: 'b', set: async () => {} }] });
+  expect(ok.map(c => c[1])).toEqual([true, true]);
+  expect(ok[0][0]).toBe(`ok: no blocks overlapping or closer than ${MIN}px (a)`);
+  await page.evaluate(() => window.show('tight'));
+  const bad = await gaps(page);
+  expect(bad.length).toBe(1);
+  expect(bad[0]).toMatch(/^\d+px apart \(over\/under\)/);
 });
