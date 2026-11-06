@@ -3,6 +3,11 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.18.1
+
+- serve-candidate: also serves the app-update module at its new address `<origin>/ui/<v>/update/<file>` (app-ui) from
+  `update-dir`; the old `<origin>/update/<v>/` still works until apps move. Fixture covers both.
+
 ## 1.18.0
 
 - Rules suite: owner paths. `{uid}` in a collection's `path` (e.g. `spaces/{uid}/tasks/t1`, one space per person)
