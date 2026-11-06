@@ -1,4 +1,4 @@
-// serve-candidate: the preload swaps core.example.test/sync/<any>/ and /update/<any>/ for local folders in every browser
+// serve-candidate: the preload swaps core.example.test/sync/<any>/, /ui/<any>/update/ and the old /update/<any>/ for local folders in every browser
 // context, and report.mjs fails a row unless the page really ran the candidate's VERSION.
 // Needs Playwright with Chromium (PLAYWRIGHT_PATH, else the 'playwright' package).
 import { test } from 'node:test';

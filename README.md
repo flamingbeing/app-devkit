@@ -85,7 +85,7 @@ Only copies the kit's folders into `.devkit/` (no Node, browser or emulators), f
 
 For the engine's own CI: run an app's browser tests on a candidate engine build, with no change to the app. Every
 Playwright browser context in a step that sets `NODE_OPTIONS` to the block's `node-options` output (`@playwright/test` or a plain script; any Playwright copy
-the process loads) serves `<origin>/sync/<any version>/` from `sync-dir` and `/update/<any version>/`
+the process loads) serves `<origin>/sync/<any version>/` from `sync-dir` and `/ui/<any version>/update/` (and the old `/update/<any version>/`)
 from `update-dir`, a service worker's own fetches included. Files the candidate lacks answer 404 (logged), never the
 live copy.
 

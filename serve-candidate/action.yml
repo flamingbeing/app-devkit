@@ -1,7 +1,7 @@
 name: Serve a candidate engine
 description: >-
   Every Playwright browser context in steps that set NODE_OPTIONS to this block's node-options output serves
-  <origin>/sync/<any>/ and /update/<any>/ from local folders (an engine candidate), and logs the engine VERSION each
+  <origin>/sync/<any>/ and /update/<any>/ or /ui/<any>/update/ from local folders (an engine candidate), and logs the engine VERSION each
   page really ran, for report.mjs.
 inputs:
   origin:
@@ -11,7 +11,7 @@ inputs:
     description: Folder with the candidate's index.js and src/ (an app-sync checkout), relative to the workspace.
     required: true
   update-dir:
-    description: Folder served for <origin>/update/<any>/ (the engine's update/). Empty = the live update module.
+    description: Folder served for <origin>/ui/<any>/update/ or the old /update/<any>/ (the engine's update/). Empty = the live update module.
     default: ''
   log:
     description: >-

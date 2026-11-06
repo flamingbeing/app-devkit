@@ -1,5 +1,5 @@
 // serve-candidate preload (node --import): every Playwright browser context this process opens serves
-// <SERVE_CANDIDATE_ORIGIN>/sync/<any>/<file> from SERVE_CANDIDATE_SYNC and /update/<any>/<file> from
+// <SERVE_CANDIDATE_ORIGIN>/sync/<any>/<file> from SERVE_CANDIDATE_SYNC and /update/<any>/<file> (or /ui/<any>/update/<file>) from
 // SERVE_CANDIDATE_UPDATE, so an app's own browser tests run on a candidate engine with no change to the app.
 // Before a page or context closes, the page imports each engine entry it asked for (index.js, or app.js on a
 // modules-only page; app.js exports VERSION from app-sync 0.9.3) and the VERSION it really got is written to
@@ -13,7 +13,8 @@ const DIRS = { sync: process.env.SERVE_CANDIDATE_SYNC, update: process.env.SERVE
 const LOG = process.env.SERVE_CANDIDATE_LOG;
 const ORIGIN = (process.env.SERVE_CANDIDATE_ORIGIN || '').replace(/\/+$/, '');
 const esc = ORIGIN.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-const CORE = new RegExp(`^${esc}/(sync|update)/([^/]+)/([^?#]*)`);
+// sync/<v>/, the old update/<v>/ and the app-ui address ui/<v>/update/
+const CORE = new RegExp(`^${esc}/(?:(sync|update)/([^/]+)|ui/([^/]+)/(update))/([^?#]*)`);
 const INDEX = new RegExp(`^${esc}/sync/[^/]+/(?:index|app)\\.js(?:[?#]|$)`);
 const TYPES = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.html': 'text/html' };
 const DONE = Symbol.for('serve-candidate');
@@ -48,7 +49,8 @@ async function attach(context) {
   context[DONE] = state;
   open.add(state);
   await context.route(CORE, route => {
-    const [, kind, pinned, rel] = route.request().url().match(CORE);
+    const m = route.request().url().match(CORE);
+    const kind = m[1] || m[4], pinned = m[2] || m[3], rel = m[5];
     const root = DIRS[kind];
     if (!root) return route.continue();
     const file = path.resolve(root, rel || 'index.js');

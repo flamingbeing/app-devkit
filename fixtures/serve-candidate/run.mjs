@@ -10,7 +10,7 @@ const page = await browser.newPage();
 const entry = mode === 'app' ? 'app.js' : 'index.js';
 const html = mode === 'none' ? '<p>no engine</p>' : `<script type="module">
   import { VERSION, part } from 'https://core.example.test/sync/0.6.3/${entry}';
-  import { label } from 'https://core.example.test/update/0.2.0/register.js';
+  import { label } from 'https://core.example.test/${mode === 'app' ? 'update/0.2.0' : 'ui/1.0.0-rc.108/update'}/register.js';
   window.got = { VERSION, part, label };
 </script>${mode === 'missing' ? '<script type="module" src="https://core.example.test/sync/0.6.3/src/gone.js"></script>' : ''}`;
 const SW = `const U = 'https://core.example.test/sync/0.6.3/index.js';
