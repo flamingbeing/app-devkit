@@ -3,6 +3,18 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.19.0
+
+- `soak.yml`: `batch` defaults to 1 (was 5), so every run of the suite starts from empty emulators, as a CI run does.
+  At 5, data piled up within a batch: in an app whose tests share one list (tasks, the starter) the first run of a
+  batch passed and the fifth failed most tests on sign-in timeouts and Firestore emulator 500s, night after night.
+- `soak-batches.sh`: while runs are left, `<prefix>.unfinished.fail.txt` says how many. A step killed by its time limit
+  writes no Playwright report, and the report read those lost runs as clean (the notes slow-phone step ran out of
+  time every night, with failures in it, and the night still closed clean). Removed once every batch has run.
+- `soak-batches.sh`: a port still taken 30 s after the last batch (CI only) is freed by stopping its holder: the
+  Firestore emulator's java outlived its parent, held 8080, and every later batch died at start.
+- `soak.yml`: the slow-phone step may run 60 minutes (was 40), the job 180 (was 150).
+
 ## 1.18.1
 
 - serve-candidate: also serves the app-update module at its new address `<origin>/ui/<v>/update/<file>` (app-ui) from

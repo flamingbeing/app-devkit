@@ -465,7 +465,7 @@ jobs:
     with: { emulators: 'firestore,auth' }   # empty for an app with no emulators
 ```
 
-Inputs: `emulators`, `test-command` (`npx playwright test`), `repeat` (10), `slow-repeat` (5), `batch` (5: runs per Playwright invocation, so the emulators are emptied between batches), `blips` (false: short
+Inputs: `emulators`, `test-command` (`npx playwright test`), `repeat` (10), `slow-repeat` (5), `batch` (1: runs per Playwright invocation; each invocation empties the emulators, so every run starts clean), `blips` (false: short
 offline blips in the slow runs; a spec that goes offline on purpose can fight them), `unit-command`, `unit-repeat`
 (100), `chaos-command`, `model-command`, `kit-ref` (the scripts' tag; defaults to this release's own, so only set it to pin older scripts), `playwright-version`, `node-version`, `browsers`
 (`chromium`; e.g. `chromium firefox` with a `test-command` that selects those projects; the slow-phone profile throttles

@@ -27,7 +27,7 @@ on:
           release's own tag (a CI test keeps it equal to package.json), so an app that does not set it runs the helpers
           of the soak.yml it calls; set it only to pin older scripts.
         type: string
-        default: v1.18.1
+        default: v1.19.0
       emulators:
         description: Firebase emulators the browser tests need (comma separated, as setup-emulators). Empty = none.
         type: string
@@ -63,9 +63,10 @@ on:
       batch:
         description: >-
           Runs per Playwright invocation. Each invocation empties the emulators first (the apps' global setup), because
-          one long run piles up data and the emulator slows until every sign-in times out.
+          one long run piles up data and the emulator slows until every sign-in times out. 1 (each run starts from empty
+          emulators, as a CI run does): at 5 an app whose tests share one list failed more with every run of the batch.
         type: number
-        default: 5
+        default: 1
       blips:
         description: Add short offline blips to the slow-phone runs (a spec that goes offline on purpose can fight them).
         type: boolean
@@ -96,7 +97,7 @@ concurrency:
 jobs:
   soak:
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    timeout-minutes: 180
     env:
       CI: 'true'
       SOAK_DIR: ${{ github.workspace }}/soak-results
@@ -139,7 +140,7 @@ jobs:
       - name: Browser tests, slow phone (${{ inputs.slow-repeat }} runs)
         if: inputs.slow-repeat > 0
         continue-on-error: true
-        timeout-minutes: 40
+        timeout-minutes: 60
         env:
           PREFIX: slow-phone
           EXTRA_ARGS: --timeout=180000
