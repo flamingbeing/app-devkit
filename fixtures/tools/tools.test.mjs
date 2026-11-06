@@ -69,7 +69,7 @@ test('soak.yml kit-ref default is this release (package.json version), so helper
 
 test('soak-batches keeps a failing batch in its own folder, drops a passing one', () => {
   const dir = mkdtempSync(join(tmpdir(), 'soak-'));
-  const run = cmd => spawnSync('bash', [join(root, 'tools/soak-batches.sh')], { encoding: 'utf8', env: { ...process.env, SOAK_DIR: dir, PREFIX: 'normal', REPEAT: '4', BATCH: '2', TEST_CMD: cmd } });
+  const run = cmd => spawnSync('bash', [join(root, 'tools/soak-batches.sh')], { encoding: 'utf8', env: { ...process.env, SOAK_DIR: dir, PREFIX: 'normal', REPEAT: '4', BATCH: '2', SOAK_PORTS: '1', TEST_CMD: cmd } });
   // Fake runner: batch 1 passes, batch 2 fails; it empties --output like Playwright and writes a file for the failing test.
   const fake = join(dir, 'fake.sh');
   writeFileSync(fake, 'for a; do case $a in --output=*) o=${a#--output=};; esac; done\nrm -rf "$o"; mkdir -p "$o/t-fail" "$o/t-pass"\nif [ -e "$SOAK_DIR/seen" ]; then echo ctx > "$o/t-fail/error-context.md"; exit 1; fi\ntouch "$SOAK_DIR/seen"\n');
@@ -78,6 +78,16 @@ test('soak-batches keeps a failing batch in its own folder, drops a passing one'
   assert.ok(!existsSync(join(dir, 'test-results/normal.b1')));
   assert.ok(existsSync(join(dir, 'test-results/normal.b2/t-fail/error-context.md')));
   assert.ok(!existsSync(join(dir, 'test-results/normal.b2/t-pass')));
+  assert.ok(!existsSync(join(dir, 'normal.unfinished.fail.txt')), 'every run finished: no note');
+});
+
+test('soak-batches killed mid-run (the step time limit) leaves a note of the runs it lost', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'soak-'));
+  // Fake runner: batch 1 writes its report; batch 2 is killed with the script, before any report
+  const fake = join(dir, 'fake.sh');
+  writeFileSync(fake, 'if [ -e "$SOAK_DIR/seen" ]; then kill -9 $PPID; exit 0; fi\ntouch "$SOAK_DIR/seen"\n');
+  spawnSync('bash', [join(root, 'tools/soak-batches.sh')], { encoding: 'utf8', env: { ...process.env, SOAK_DIR: dir, PREFIX: 'slow-phone', REPEAT: '3', BATCH: '1', SOAK_PORTS: '1', TEST_CMD: `bash ${fake}` } });
+  assert.match(readFileSync(join(dir, 'slow-phone.unfinished.fail.txt'), 'utf8'), /^slow-phone: 2 of 3 runs did not finish/);
 });
 
 test('startup-size counts what a page starts and its static imports, not import() or other origins', () => {
