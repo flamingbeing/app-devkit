@@ -3,6 +3,14 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.18.0
+
+- Rules suite: owner paths. `{uid}` in a collection's `path` (e.g. `spaces/{uid}/tasks/t1`, one space per person)
+  puts each test user at the path with its own uid there, for every generic case, and adds one: at someone else's
+  path every role, the owner's own role too, is denied read, list, create, update and delete. `list.filter` is refused
+  with `{uid}`. Paths without it run exactly as before. Worked case: `people/{uid}/notes` in
+  `rules/examples/single-group/`.
+
 ## 1.17.0
 
 - New `playwright/gaps.mjs` (copied to `.devkit/playwright/` with the rest): `gaps(page, scope?)` lists painted blocks

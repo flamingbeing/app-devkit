@@ -226,6 +226,12 @@ read `resource.data.<field>`) the listing roles must filter on their own group's
 group's value, or a role in another group only is denied, so the filter field mirrors the source of the role.
 `listOnly: true` runs just these cases (see `entries/e1` in `rules/examples/multi-group/rules.test.mjs`).
 
+**Owner paths** (one space per person): `{uid}` in a path, such as `spaces/{uid}/tasks/t1`, makes it each user's own.
+Every case above runs with the acting test user's uid in that place, and one more is added: at someone else's path,
+every role (the owner's own role too, admins included) is denied read, list, create, update and delete. Rules of the
+form `request.auth.uid == uid && can('_', roles)` pass it (`people/{uid}/notes` in `rules/examples/single-group/`).
+`list.filter` is not for owner paths.
+
 ```js
 // rules.test.mjs
 import { readFileSync } from 'node:fs';
@@ -237,7 +243,7 @@ const emu = suite({
   roles: ['admin', 'member', 'guest'],
   collections: [
     { path: 'notes/n1', read: ['admin', 'member', 'guest'], write: ['admin', 'member'],
-      data: { text: 'hello' }, stamp: 'strict' },                 // '{g}' in the path marks a group id
+      data: { text: 'hello' }, stamp: 'strict' },                 // '{g}' in the path marks a group id, '{uid}' an owner
   ],
   // fallback: { role: 'member', seed: (uid, g) => [[`groups/${g}/members/${uid}`, { role: 'member' }]] },
 });
