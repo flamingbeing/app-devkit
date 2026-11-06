@@ -142,7 +142,8 @@ export function emulator({ project, host = process.env.FIRESTORE_EMULATOR_HOST |
 //   roles         every role the app uses, e.g. ['admin', 'member', 'guest']
 //   collections   [{ path, read, write, data, stamp, lookups }]
 //       path      a document path; '{g}' marks the group id (multi-group). Without it the app is single-group and
-//                 the claim key is '_'.
+//                 the claim key is '_'. '{uid}' marks an owner path (one space per person, e.g. spaces/{uid}/tasks/t1):
+//                 each test user works at the path with its own uid there, and someone else's is refused (below).
 //       read      roles that may read (not needed with listOnly); write: roles that may create; data: a valid new document (object or fn(uid))
 //       stamp     'strict' (serverAt == request.time required), 'lenient' (optional, but if present it must be
 //                 request.time) or 'none' (default)
@@ -151,10 +152,12 @@ export function emulator({ project, host = process.env.FIRESTORE_EMULATOR_HOST |
 //                 incl. a signed-in user with no role, must be denied an unfiltered list). filter: { field }, for a
 //                 rule that proves access from a query filter (`resource.data.<field>`): a listing role must filter
 //                 on its own group's value (the group id '{g}' stands for) and is denied an unfiltered query or
-//                 another group's value, so the filter field mirrors the source of the role.
+//                 another group's value, so the filter field mirrors the source of the role. Not with '{uid}'.
 //       listOnly  true = run only the list cases for this collection (path is any document path in it)
 //   fallback      optional { seed(uid, gid) -> [[path, data], …], role } for the claims-or-doc migration form:
 //                 a user with no claim and that role doc must get `role`'s access.
+// Owner paths add one case: at another person's path every role (the owner's own role too) is denied read, list,
+// create, update and delete.
 export function suite(config) {
   const emu = emulator(config);
   const roles = config.roles;
@@ -166,10 +169,13 @@ export function suite(config) {
 
   for (const c of config.collections) {
     const multi = c.path.includes('{g}');
+    const owned = c.path.includes('{uid}');
+    if (owned && c.list?.filter) throw new Error(`rules suite: ${c.path}: list.filter is not for owner paths ('{uid}')`);
     const key = multi ? G : '_';
-    const path = c.path.replaceAll('{g}', G);
-    const collection = path.split('/').slice(0, -1).join('/');
-    const fresh = () => `${collection}/new-${Math.random().toString(36).slice(2, 10)}`;
+    // the document and its collection as the user `uid` sees them (an owner path: their own)
+    const at = (uid) => c.path.replaceAll('{g}', G).replaceAll('{uid}', uid);
+    const collection = (uid) => at(uid).split('/').slice(0, -1).join('/');
+    const fresh = (uid) => `${collection(uid)}/new-${Math.random().toString(36).slice(2, 10)}`;
     const data = (uid) => (typeof c.data === 'function' ? c.data(uid) : c.data);
     const stamp = c.stamp ?? 'none';
     const opts = stamp === 'none' ? {} : { serverAt: true };
@@ -178,7 +184,12 @@ export function suite(config) {
     const writer = c.write?.[0];
     const claims = (role, extra = {}) => ({ g: { [key]: role }, v: 1, ...extra });
     const name = (s) => `${c.path}: ${s}`;
-    const reset = async () => { await emu.clear(); if (c.data) await emu.seed(path, data('seed')); };
+    // the stored document each user reads: one shared one, or (owner paths) one in each user's own place
+    const reset = async (...uids) => {
+      await emu.clear();
+      if (!c.data) return;
+      for (const uid of owned ? uids : ['seed']) await emu.seed(at(uid), data(owned ? uid : 'seed'));
+    };
 
     if (c.list) {
       const lister = c.list.roles ?? [];
@@ -187,34 +198,35 @@ export function suite(config) {
       const lclaims = (role) => ({ g: { [lkey]: role }, v: 1 });
       const own = filter ? { field: filter.field, value: G } : undefined;
       const other = filter ? { field: filter.field, value: OTHER } : undefined;
-      const q = (u, where) => (where ? u.query(collection, where) : u.list(collection));
+      const q = (u, uid, where) => (where ? u.query(collection(uid), where) : u.list(collection(uid)));
 
       test(name('list: signed out, no role and non-listing roles are denied an unfiltered list'), async () => {
-        await reset();
-        assert.equal((await emu.anon().list(collection)).ok, false, 'signed out');
-        assert.equal((await emu.as('u-none', { v: 1 }).list(collection)).ok, false, 'signed in, no role');
+        await reset('u-anon', 'u-none', ...roles.map((r) => `u-${r}`));
+        assert.equal((await emu.anon().list(collection('u-anon'))).ok, false, 'signed out');
+        assert.equal((await emu.as('u-none', { v: 1 }).list(collection('u-none'))).ok, false, 'signed in, no role');
         for (const r of roles.filter((x) => !lister.includes(x))) {
-          assert.equal((await emu.as(`u-${r}`, lclaims(r)).list(collection)).ok, false, `${r} list`);
+          assert.equal((await emu.as(`u-${r}`, lclaims(r)).list(collection(`u-${r}`))).ok, false, `${r} list`);
         }
       });
 
       if (lister.length) {
         test(name(`list: ${lister.join('/')} may list${filter ? ` with ${filter.field} = their group` : ''}`), async () => {
-          await reset();
-          for (const r of lister) assert.equal((await q(emu.as(`u-${r}`, lclaims(r)), own)).ok, true, `${r} list`);
+          await reset(...lister.map((r) => `u-${r}`));
+          for (const r of lister) assert.equal((await q(emu.as(`u-${r}`, lclaims(r)), `u-${r}`, own)).ok, true, `${r} list`);
         });
       }
 
       if (filter) {
         test(name(`list: ${filter.field} must mirror the role's group (no filter, other group, no role: denied)`), async () => {
           await reset();
+          const all = collection('');
           for (const r of lister) {
             const u = emu.as(`u-${r}`, lclaims(r));
-            assert.equal((await u.list(collection)).ok, false, `${r} unfiltered`);
-            assert.equal((await q(u, other)).ok, false, `${r} filtered on another group`);
+            assert.equal((await u.list(all)).ok, false, `${r} unfiltered`);
+            assert.equal((await q(u, '', other)).ok, false, `${r} filtered on another group`);
           }
-          assert.equal((await q(emu.as('u-none', { v: 1 }), own)).ok, false, 'no role, filtered');
-          assert.equal((await q(emu.as('u-else', { g: { [OTHER]: lister[0] ?? roles[0] }, v: 1 }), own)).ok, false,
+          assert.equal((await q(emu.as('u-none', { v: 1 }), '', own)).ok, false, 'no role, filtered');
+          assert.equal((await q(emu.as('u-else', { g: { [OTHER]: lister[0] ?? roles[0] }, v: 1 }), '', own)).ok, false,
             'a role in another group only, filtered on this one');
         });
       }
@@ -222,97 +234,113 @@ export function suite(config) {
     if (c.listOnly) continue;
 
     test(name('signed out: read and create denied'), async () => {
-      await reset();
-      assert.equal((await emu.anon().get(path)).ok, false);
-      assert.equal((await emu.anon().list(collection)).ok, false);
-      assert.equal((await emu.anon().create(fresh(), data('anon'), opts)).ok, false);
+      await reset('u-anon');
+      assert.equal((await emu.anon().get(at('u-anon'))).ok, false);
+      assert.equal((await emu.anon().list(collection('u-anon'))).ok, false);
+      assert.equal((await emu.anon().create(fresh('u-anon'), data('anon'), opts)).ok, false);
     });
 
     test(name(`allowed roles: read ${c.read.join('/')}, create ${c.write.join('/') || 'none'}`), async () => {
-      await reset();
-      for (const r of c.read) assert.equal((await emu.as(`u-${r}`, claims(r)).get(path)).ok, true, `${r} read`);
+      await reset(...c.read.map((r) => `u-${r}`));
+      for (const r of c.read) assert.equal((await emu.as(`u-${r}`, claims(r)).get(at(`u-${r}`))).ok, true, `${r} read`);
       for (const r of c.write) {
-        assert.equal((await emu.as(`u-${r}`, claims(r)).create(fresh(), data(`u-${r}`), opts)).ok, true, `${r} create`);
+        assert.equal((await emu.as(`u-${r}`, claims(r)).create(fresh(`u-${r}`), data(`u-${r}`), opts)).ok, true, `${r} create`);
       }
     });
 
     test(name('other roles and no role denied'), async () => {
-      await reset();
+      await reset(...[...roles, ''].map((r) => `u-x${r}`));
       for (const r of [...roles.filter((x) => !c.read.includes(x)), '']) {
         const u = emu.as(`u-x${r}`, r ? claims(r) : { v: 1 });
-        assert.equal((await u.get(path)).ok, false, `${r || 'no role'} read`);
+        assert.equal((await u.get(at(`u-x${r}`))).ok, false, `${r || 'no role'} read`);
       }
       for (const r of [...roles.filter((x) => !c.write.includes(x)), '']) {
         const u = emu.as(`u-x${r}`, r ? claims(r) : { v: 1 });
-        assert.equal((await u.create(fresh(), data(`u-x${r}`), opts)).ok, false, `${r || 'no role'} create`);
+        assert.equal((await u.create(fresh(`u-x${r}`), data(`u-x${r}`), opts)).ok, false, `${r || 'no role'} create`);
       }
     });
 
     if (multi) {
       test(name('a role in another group only: denied'), async () => {
-        await reset();
+        await reset('u-other');
         const u = emu.as('u-other', { g: { [OTHER]: reader }, v: 1 });
-        assert.equal((await u.get(path)).ok, false);
+        assert.equal((await u.get(at('u-other'))).ok, false);
         if (writer) {
           const w = emu.as('u-other', { g: { [OTHER]: writer }, v: 1 });
-          assert.equal((await w.create(fresh(), data('u-other'), opts)).ok, false);
+          assert.equal((await w.create(fresh('u-other'), data('u-other'), opts)).ok, false);
+        }
+      });
+    }
+
+    if (owned) {
+      test(name("someone else's: every role, the owner's own too, denied read, list, create, update and delete"), async () => {
+        const owner = `u-${reader ?? roles[0]}`;
+        for (const r of roles) {
+          await reset(owner);
+          const u = emu.as(`u-else-${r}`, claims(r));
+          assert.equal((await u.get(at(owner))).ok, false, `${r} read`);
+          assert.equal((await u.list(collection(owner))).ok, false, `${r} list`);
+          assert.equal((await u.create(fresh(owner), data(`u-else-${r}`), opts)).ok, false, `${r} create`);
+          if (c.data) assert.equal((await u.update(at(owner), data(`u-else-${r}`), opts)).ok, false, `${r} update`);
+          assert.equal((await u.delete(at(owner))).ok, false, `${r} delete`);
         }
       });
     }
 
     test(name('expired access (x in the past): denied; x in the future: allowed'), async () => {
-      await reset();
-      assert.equal((await emu.as('u-old', claims(reader, { x: now() - 60 })).get(path)).ok, false);
-      assert.equal((await emu.as('u-new', claims(reader, { x: now() + 3600 })).get(path)).ok, true);
+      await reset('u-old', 'u-new');
+      assert.equal((await emu.as('u-old', claims(reader, { x: now() - 60 })).get(at('u-old'))).ok, false);
+      assert.equal((await emu.as('u-new', claims(reader, { x: now() + 3600 })).get(at('u-new'))).ok, true);
       if (writer) {
         const w = emu.as('u-old', claims(writer, { x: now() - 60 }));
-        assert.equal((await w.create(fresh(), data('u-old'), opts)).ok, false);
+        assert.equal((await w.create(fresh('u-old'), data('u-old'), opts)).ok, false);
       }
     });
 
     test(name('revoked uid: denied even with a valid claim'), async () => {
-      await reset();
+      await reset('u-gone');
       await emu.seed('revoked/u-gone', { at: new Date() });
-      assert.equal((await emu.as('u-gone', claims(reader)).get(path)).ok, false);
+      assert.equal((await emu.as('u-gone', claims(reader)).get(at('u-gone'))).ok, false);
       if (writer) {
-        assert.equal((await emu.as('u-gone', claims(writer)).create(fresh(), data('u-gone'), opts)).ok, false);
+        assert.equal((await emu.as('u-gone', claims(writer)).create(fresh('u-gone'), data('u-gone'), opts)).ok, false);
       }
     });
 
     if (writer && stamp !== 'none') {
       test(name(`serverAt (${stamp})`), async () => {
         await reset();
-        const w = emu.as(`u-${writer}`, claims(writer));
-        const d = data(`u-${writer}`);
-        assert.equal((await w.create(fresh(), { ...d, serverAt: new Date(Date.now() - 60000) })).ok, false,
+        const uid = `u-${writer}`;
+        const w = emu.as(uid, claims(writer));
+        const d = data(uid);
+        assert.equal((await w.create(fresh(uid), { ...d, serverAt: new Date(Date.now() - 60000) })).ok, false,
           'a client-chosen serverAt is refused');
-        assert.equal((await w.create(fresh(), d)).ok, stamp === 'lenient', 'no serverAt');
-        assert.equal((await w.create(fresh(), d, { serverAt: true })).ok, true, 'serverAt = request.time');
+        assert.equal((await w.create(fresh(uid), d)).ok, stamp === 'lenient', 'no serverAt');
+        assert.equal((await w.create(fresh(uid), d, { serverAt: true })).ok, true, 'serverAt = request.time');
       });
     }
 
     test(name(`document lookups: read ≤ ${max.read}, create ≤ ${max.write}`), async () => {
       assert.ok(max.read <= 2 && max.write <= 2, 'the kit allows at most 2 lookups per request');
-      await reset();
+      await reset(`u-${reader}`);
       const u = emu.as(`u-${reader}`, claims(reader));
-      const n = await emu.lookups(() => u.get(path));
+      const n = await emu.lookups(() => u.get(at(`u-${reader}`)));
       assert.ok(n <= max.read, `read used ${n} lookups`);
       if (writer) {
         const w = emu.as(`u-${writer}`, claims(writer));
-        const m = await emu.lookups(() => w.create(fresh(), data(`u-${writer}`), opts));
+        const m = await emu.lookups(() => w.create(fresh(`u-${writer}`), data(`u-${writer}`), opts));
         assert.ok(m <= max.write, `create used ${m} lookups`);
       }
     });
 
     if (config.fallback) {
       test(name('migration: no claim, role doc only → that role; a claim wins over the doc'), async () => {
-        await reset();
+        await reset('u-doc');
         const r = config.fallback.role;
         for (const [p, d] of config.fallback.seed('u-doc', key)) await emu.seed(p, d);
-        assert.equal((await emu.as('u-doc', { v: 0 }).get(path)).ok, c.read.includes(r), 'doc role read');
+        assert.equal((await emu.as('u-doc', { v: 0 }).get(at('u-doc'))).ok, c.read.includes(r), 'doc role read');
         const weaker = roles.find((x) => !c.read.includes(x));
         if (weaker && c.read.includes(r)) {
-          assert.equal((await emu.as('u-doc', claims(weaker)).get(path)).ok, false, 'claim wins');
+          assert.equal((await emu.as('u-doc', claims(weaker)).get(at('u-doc'))).ok, false, 'claim wins');
         }
       });
     }

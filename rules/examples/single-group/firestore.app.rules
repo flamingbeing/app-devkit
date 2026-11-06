@@ -12,5 +12,16 @@ service cloud.firestore {
         && request.resource.data.text is string && request.resource.data.text.size() <= 2000;
       allow delete: if can('_', ['admin']);
     }
+
+    // One space per person: people/{uid}/... is its owner's alone, with their role in '_' (admins included: nobody
+    // reads anyone else's). The suite's owner-path cases ('{uid}' in the path) test it.
+    function mine(uid, roles) { return isSignedIn() && request.auth.uid == uid && can('_', roles); }
+    match /people/{uid}/notes/{id} {
+      allow read: if mine(uid, ['admin', 'member', 'guest']);
+      allow create, update: if mine(uid, ['admin', 'member']) && stamped()
+        && request.resource.data.keys().hasOnly(['text', 'serverAt'])
+        && request.resource.data.text is string && request.resource.data.text.size() <= 2000;
+      allow delete: if mine(uid, ['admin', 'member']);
+    }
   }
 }
