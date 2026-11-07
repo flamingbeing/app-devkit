@@ -3,6 +3,12 @@
 Versions are tags: `v1.x.y` never moves once released; `v1` always points at the newest `v1.x.y`. A breaking change
 becomes `v2`.
 
+## 1.19.1
+
+- `bundle-page.mjs`: a core file joined into a chunk keeps its core address as `import.meta.url`. The kit's vault
+  module finds its style sheet with `new URL('./vault.css', import.meta.url)`; bundled, that named the app's chunk
+  (`notes.flamingbeing.com/src/vault.css`, 404) and Notes' sidebars drew unstyled.
+
 ## 1.19.0
 
 - `soak.yml`: `batch` defaults to 1 (was 5), so every run of the suite starts from empty emulators, as a CI run does.
