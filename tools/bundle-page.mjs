@@ -5,7 +5,8 @@
 // - Each local <script type="module" src> is an entry; each literal import() (a screen, a heavy extra) becomes its own
 //   file, loaded on first use as before.
 // - The core at an exact pin (core.anawj.com/ui/<x.y.z>/, /sync/<x.y.z>/, also through the import map's @core/*) is
-//   fetched and joined in, only what the page imports: a released version never changes.
+//   fetched and joined in, only what the page imports: a released version never changes. Its import.meta.url stays
+//   its core address, so a style sheet or file it finds beside itself still loads from the core.
 // - Everything else stays as it is: other origins (Firebase's CDN, the update core, which the service worker also
 //   loads) and the import map's other bare names (vendored Firebase), so a test's import('firebase/auth') still gets
 //   the page's one copy.
@@ -83,7 +84,9 @@ const core = {
         if (!r.ok) throw new Error(`bundle: ${a.path} answered ${r.status}`);
         fetched.set(a.path, await r.text());
       }
-      return { contents: fetched.get(a.path), loader: 'js' };
+      // a core file finds files beside it by its own address (`new URL('./vault.css', import.meta.url)`): joined into a
+      // chunk on the app's origin, import.meta.url would name the chunk, so it keeps the core address it was fetched from
+      return { contents: fetched.get(a.path).replace(/\bimport\.meta\.url\b/g, JSON.stringify(a.path)), loader: 'js' };
     });
   },
 };
